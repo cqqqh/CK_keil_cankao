@@ -1,0 +1,12 @@
+E:\WebServer\Analog.obj,
+E:\WebServer\Arp.obj,
+E:\WebServer\Cksum.obj,
+E:\WebServer\Http.obj,
+E:\WebServer\Icmp.obj,
+E:\WebServer\Ip.obj,
+E:\WebServer\Main.obj,
+E:\WebServer\Tcp.obj,
+E:\WebServer\Timer.obj,
+E:\WebServer\Udp.obj,
+E:\WebServer\Webdoc1.obj,
+E:\WebServer\CP220x_REG.obj  TO E:\WebServer\Analog RS(255) PL(68) PW(78) 

@@ -1,0 +1,26 @@
+The HID project is a demo program for the ST 'STM32F103VB'
+microcontroller using 'EK-STM32F', compliant 
+to Cortex Microcontroller Software Interface Standard (CMSIS v2.0).
+
+Example functionality:
+ - Clock Settings:
+   - XTAL    =            8 MHz
+   - SYSCLK  =           72 MHz
+   - HCLK    = SYSCLK  = 72 MHz
+   - USB clock         = 48 MHz
+
+It demonstrates an USB HID (Human Interface Device):
+  - 4 LEDs
+  - 3 Push Buttons (Key2,Key3), Joystick (Key4)
+
+The USB HID is recognized by the host PC running Windows
+which will load a generic HID driver. The board LEDs
+and Push Buttons can then be accessed from the PC
+through a custom HID Client Program.
+
+
+The HID program is available for the following targets:
+
+  STM32F103 Flash: configured for on-chip Flash ROM
+                   (used for production or target debugging)
+

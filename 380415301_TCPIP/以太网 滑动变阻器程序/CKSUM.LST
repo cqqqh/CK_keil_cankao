@@ -1,0 +1,66 @@
+C51 COMPILER V8.05a   CKSUM                                                                09/01/2010 15:06:33 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE CKSUM
+OBJECT MODULE PLACED IN CKSUM.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE CKSUM.c OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          /*
+   2          ;-------------------------------------------------------------------------
+   3          ; Copyright (c) 2002 Jim Brady
+   4          ; Do not use commercially without author's permission
+   5          ; Last revised August 2002
+   6          ; CKSUM.A51
+   7          ;
+   8          ; This computes the internet checksum on an 8051
+   9          ;
+  10          ; Call from C program: UINT cksum(UCHAR xdata * buf, UINT length);
+  11          ; Where * buf is pointer to first char (must be in xdata space)
+  12          ; and "length" is number of bytes (not words) to sum over
+  13          ;-------------------------------------------------------------------------
+  14          */
+  15          #include "net.h"
+  16          
+  17          UINT cksum(UCHAR xdata *check,UINT length) //计算校验和
+  18          {
+  19   1              LONG sum=0;
+  20   1              UINT i;
+  21   1              UINT xdata *ptr; 
+  22   1          ptr=(UINT xdata *)check;
+  23   1              for (i=0;i<(length)/2;i++)
+  24   1              {
+  25   2                      sum+=*ptr++;
+  26   2              }
+  27   1              if (length&0x01)//表示长度为单数
+  28   1              {
+  29   2                      sum=sum+((*ptr)&0xff00);
+  30   2              }
+  31   1              sum=(sum&0xffff)+((sum>>16)&0xffff);//高16位和低16位相加
+  32   1              if(sum&0xffff0000)
+  33   1              {//表示有进位
+  34   2                      sum++;
+  35   2              }
+  36   1              return ( (UINT)((sum)&0xffff));
+  37   1      //      return ( (UINT)(~((sum)&0xffff)));
+  38   1      }
+  39          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    192    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       8
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

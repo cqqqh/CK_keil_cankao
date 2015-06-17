@@ -1,0 +1,10 @@
+"STARTUP.obj",
+"diskio.obj",
+"ff.obj",
+"mcu_init.obj",
+"sd.obj",
+"spi.obj",
+"test1_main.obj",
+"uart.obj" 
+TO "microSD" 
+RAMSIZE(256) 

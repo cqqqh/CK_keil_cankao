@@ -1,0 +1,198 @@
+C51 COMPILER V8.05a   UDP                                                                  09/01/2010 15:06:33 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE UDP
+OBJECT MODULE PLACED IN UDP.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE UDP.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net UDP.C
+   6          //
+   7          // This module handles UDP messages
+   8          // Refer to RFC 768, 1122
+   9          // Also RFC 862 echo, RFC 867 daytime, and RFC 868 time
+  10          //-----------------------------------------------------------------------------
+  11          #include <string.h>
+  12          //#include <stdlib.h>
+  13          #include "C8051f340.h"
+  14          #include "net.h"
+  15          #include "ip.h"
+  16          #include "cksum.h"
+  17          #include "icmp.h"
+  18          #include "udp.h"
+  19          
+  20          extern UCHAR idata debug;
+  21          extern ULONG code my_ipaddr;
+  22          UINT xdata sender_udpport;
+  23          static ULONG xdata sender_ipaddr;
+  24          extern char xdata text[];
+  25          
+  26          extern char xdata outbuf1[];
+  27          //------------------------------------------------------------------------
+  28          //      UDP Echo service - see RFC 862
+  29          // This simply echos what it received back to the sender
+  30          //------------------------------------------------------------------------
+  31          void udp_echo_service(UCHAR xdata * inbuf, UINT len)
+  32          {
+  33   1         
+  34   1              udp_send(inbuf, ECHO_PORT, len);      
+  35   1      }
+  36          
+  37          
+  38          
+  39          //------------------------------------------------------------------------
+  40          //      This handles outgoing UDP messages
+  41          // See "TCP/IP Illustrated, Volume 1" Sect 11.1 - 11.3
+  42          //------------------------------------------------------------------------
+  43          void udp_send(UCHAR xdata * inbuf, UINT port, UINT len)
+  44          {
+  45   1              ULONG idata sum;
+  46   1              UINT idata result;
+  47   1              UCHAR xdata * outbuf;
+  48   1              UDP_HEADER xdata * udp;
+  49   1          IP_HEADER xdata * ip;
+  50   1              
+  51   1         // Allocate memory for entire outgoing message including
+  52   1         // eth & IP headers. Total ethernet message length is:
+  53   1         // 14 byte eth header + 20 byte IP header + 8 byte UDP header
+  54   1         // + length of this data 
+  55   1        // outbuf = (UCHAR xdata *)malloc(42 + len);
+C51 COMPILER V8.05a   UDP                                                                  09/01/2010 15:06:33 PAGE 2   
+
+  56   1        // if (outbuf == NULL)
+  57   1         //{
+  58   1          //  return;
+  59   1         //}
+  60   1         outbuf=outbuf1;
+  61   1         udp = (UDP_HEADER xdata *)(outbuf + 34);
+  62   1         ip = (IP_HEADER xdata *)(outbuf + 14);
+  63   1         
+  64   1         // Direct message back to the senders port. 
+  65   1              udp->dest_port = sender_udpport;
+  66   1              udp->source_port = port;
+  67   1              udp->length = 8 + len;
+  68   1              udp->checksum = 0;
+  69   1                      
+  70   1              // Fill in data
+  71   1         // Important do not free receive buffer prior to this
+  72   1         memcpy(&udp->msg_data, (inbuf + 42), len); 
+  73   1              
+  74   1              
+  75   1              // Compute checksum including 12 bytes of pseudoheader
+  76   1              // Must pre-fill 2 items in outbuf to do this
+  77   1              // Direct message back to senders ip address
+  78   1              ip->dest_ipaddr = sender_ipaddr;
+  79   1              ip->source_ipaddr = my_ipaddr;
+  80   1               
+  81   1              
+  82   1              // Sum source_ipaddr, dest_ipaddr, and entire UDP message 
+  83   1              sum = (ULONG)cksum(outbuf + 26, 8 + udp->length);
+  84   1                              
+  85   1              // Add in the rest of pseudoheader which is
+  86   1              // zero, protocol id, and UDP length
+  87   1              sum += (ULONG)0x0011;
+  88   1              sum += (ULONG)udp->length;
+  89   1      
+  90   1              // In case there was a carry, add it back around
+  91   1              result = (UINT)(sum + (sum >> 16));
+  92   1              udp->checksum = ~result;
+  93   1              ip_send(outbuf, sender_ipaddr, UDP_TYPE, udp->length);
+  94   1      }
+  95          
+  96          
+  97          
+  98          //------------------------------------------------------------------------
+  99          // This handles incoming UDP messages
+ 100          // See "TCP/IP Illustrated, Volume 1" Sect 11.1 - 11.3
+ 101          //------------------------------------------------------------------------
+ 102          void udp_rcve(UCHAR xdata * inbuf, UINT len)
+ 103          {
+ 104   1         UINT idata result;
+ 105   1         UDP_HEADER xdata * udp;
+ 106   1         IP_HEADER xdata * ip;
+ 107   1         ULONG idata sum;
+ 108   1            
+ 109   1              // Total of eth & IP headers = 34 bytes      
+ 110   1         udp = (UDP_HEADER xdata *)(inbuf + 34);
+ 111   1         ip = (IP_HEADER xdata *)(inbuf + 14);
+ 112   1                              
+ 113   1              // The IP length "len" should be the same as the redundant length
+ 114   1              // udp->length.  TCP/IP Illustrated, Vol 2, Sect 23.7 says to use the
+ 115   1              // UDP length, unless IP length < UDP length, in which case the frame
+ 116   1              // should be discarded.
+ 117   1         if (len < udp->length) return;
+C51 COMPILER V8.05a   UDP                                                                  09/01/2010 15:06:33 PAGE 3   
+
+ 118   1                         
+ 119   1              // If the checksum is zero it means that the sender did not compute
+ 120   1              // it and we should not try to check it.
+ 121   1              if (udp->checksum == 0)
+ 122   1              {
+ 123   2              }
+ 124   1              else
+ 125   1              {
+ 126   2                      // Compute UDP checksum including 12 byte pseudoheader
+ 127   2                      // Sum source_ipaddr, dest_ipaddr, and entire UDP message 
+ 128   2                      sum = (ULONG)cksum(inbuf + 26, 8 + udp->length);
+ 129   2                      
+ 130   2                      // Add in the rest of pseudoheader which is
+ 131   2                      // zero, protocol id, and UDP length
+ 132   2                      sum += (ULONG)0x0011;     
+ 133   2                      sum += (ULONG)udp->length;
+ 134   2      
+ 135   2                      // In case there was a carry, add it back around
+ 136   2                      result = (UINT)(sum + (sum >> 16));
+ 137   2                      
+ 138   2                      if (result != 0xFFFF)
+ 139   2                      {
+ 140   3                              return;
+ 141   3                      }
+ 142   2              
+ 143   2              }
+ 144   1                      
+ 145   1              // Capture sender's port number and ip_addr
+ 146   1              // to send return message to
+ 147   1              sender_udpport = udp->source_port;
+ 148   1         sender_ipaddr = ip->source_ipaddr;
+ 149   1                                            
+ 150   1              // See if any applications are on any ports
+ 151   1              switch (udp->dest_port)
+ 152   1              {
+ 153   2                      case ECHO_PORT:
+ 154   2                      // Pass it the payload length
+ 155   2                      udp_echo_service(inbuf, udp->length - 8);
+ 156   2                      break;
+ 157   2      
+ 158   2                      default:
+ 159   2                      // If no application is registered to handle incoming
+ 160   2                      // UDP message then send ICMP destination unreachable
+ 161   2                      dest_unreach_send(inbuf, ip->source_ipaddr);
+ 162   2                      break;
+ 163   2              }
+ 164   1      }
+ 165          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    616    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      6    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      16
+   IDATA SIZE       =   ----      12
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+C51 COMPILER V8.05a   UDP                                                                  09/01/2010 15:06:33 PAGE 4   
+
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

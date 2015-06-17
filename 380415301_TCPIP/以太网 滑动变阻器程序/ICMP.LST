@@ -1,0 +1,182 @@
+C51 COMPILER V8.05a   ICMP                                                                 09/01/2010 15:06:32 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE ICMP
+OBJECT MODULE PLACED IN ICMP.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ICMP.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net ICMP.C
+   6          //
+   7          // This module handles ICMP messages
+   8          // Refer to RFC 792, 896, 950, 1122, and 1191
+   9          //-----------------------------------------------------------------------------
+  10          #include <string.h>
+  11          //#include <stdlib.h>
+  12          #include "C8051f340.h"
+  13          #include "net.h"
+  14          #include "cksum.h"
+  15          #include "ip.h"
+  16          #include "icmp.h"
+  17          
+  18          extern UCHAR idata debug;
+  19          extern char xdata outbuf1[];
+  20          
+  21          //------------------------------------------------------------------------
+  22          // This builds a ping response message.  It allocates memory for the
+  23          // entire outgoing message, including Eth and IP headers.  See "TCP/IP
+  24          // Illustrated, Volume 1" Sect 7.2 for info on Ping messages
+  25          //------------------------------------------------------------------------
+  26          void ping_send(UCHAR xdata * inbuf, ULONG ipaddr, UINT len)
+  27          {
+  28   1         PING_HEADER xdata * ping_in;
+  29   1         PING_HEADER xdata * ping_out;
+  30   1         UCHAR xdata * outbuf;
+  31   1                  
+  32   1         ping_in = (PING_HEADER xdata *)(inbuf + 34);
+  33   1            
+  34   1         // Allocate memory for entire outgoing message
+  35   1       //  outbuf = (UCHAR xdata *)malloc(len + 34);
+  36   1        // if (outbuf == NULL)
+  37   1         //{
+  38   1          //  return;
+  39   1         //}      
+  40   1          outbuf = outbuf1;
+  41   1         // Ping response message payload starts at offset 34
+  42   1         ping_out = (PING_HEADER xdata *)(outbuf + 34);
+  43   1      
+  44   1         ping_out->msg_type = 0;
+  45   1         ping_out->msg_code = 0;
+  46   1         ping_out->checksum = 0;
+  47   1         ping_out->identifier = ping_in->identifier;
+  48   1         ping_out->sequence = ping_in->sequence;
+  49   1         
+  50   1         memcpy(&ping_out->echo_data, &ping_in->echo_data, len - 8);
+  51   1                  
+  52   1         // Compute checksum over the ICMP header plus
+  53   1              // optional data and insert complement
+  54   1         ping_out->checksum = ~cksum(outbuf + 34, len);
+  55   1                              
+C51 COMPILER V8.05a   ICMP                                                                 09/01/2010 15:06:32 PAGE 2   
+
+  56   1      
+  57   1         ip_send(outbuf, ipaddr, ICMP_TYPE, len);
+  58   1      }
+  59          
+  60          
+  61          
+  62          //------------------------------------------------------------------------
+  63          // This builds an outgoing ICMP destination port unreachable response
+  64          // message.  See See "TCP/IP Illustrated, Volume 1" Sect 6.5.  This
+  65          // message is typically sent in response to a UDP message directed
+  66          // to a port that has no corresponding application running. 
+  67          // Todo: The spec says we should return all options that were in
+  68          // the original incoming IP header.  Right now we cut off everything
+  69          // after the first 20 bytes. 
+  70          //------------------------------------------------------------------------
+  71          void dest_unreach_send(UCHAR xdata * inbuf, ULONG ipaddr)
+  72          {
+  73   1         UCHAR xdata * outbuf;
+  74   1         ICMP_ERR_HEADER xdata * icmp;
+  75   1                  
+  76   1         // Allocate memory for entire outgoing message
+  77   1         // including eth and IP haders.  Always 70 bytes
+  78   1        // outbuf = (UCHAR xdata *)malloc(70);
+  79   1         //if (outbuf == NULL)
+  80   1        // {
+  81   1           // return;
+  82   1         //} 
+  83   1         outbuf = outbuf1;     
+  84   1            
+  85   1         icmp = (ICMP_ERR_HEADER xdata *)(outbuf + 34);
+  86   1         
+  87   1         // Fill in ICMP error message header
+  88   1         icmp->msg_type = 3;   // destination unreachable
+  89   1         icmp->msg_code = 3;   // port unreachable
+  90   1         icmp->checksum = 0;
+  91   1            
+  92   1         // Fill in ICMP error message data
+  93   1         icmp->msg_data = 0;
+  94   1                 
+  95   1         // Copy in 20 byte original incoming IP header
+  96   1         // plus 8 bytes of data
+  97   1         memcpy(&icmp->echo_data, inbuf + 14, 28);
+  98   1                                     
+  99   1         // Compute checksum over the 36 byte long ICMP
+ 100   1         // header plus data and insert complement
+ 101   1         icmp->checksum = ~cksum(outbuf + 34, 36);
+ 102   1            
+ 103   1         // Forward message to the IP layer
+ 104   1         ip_send(outbuf, ipaddr, ICMP_TYPE, 36);
+ 105   1      }
+ 106          
+ 107          
+ 108          
+ 109          
+ 110          //------------------------------------------------------------------------
+ 111          // This handles incoming ICMP messages.  See "TCP/IP Illustrated,
+ 112          // Volume 1" Sect 6.2 for discussion of the various ICMP messages
+ 113          //------------------------------------------------------------------------
+ 114          void icmp_rcve(UCHAR xdata * inbuf, UINT len)
+ 115          {
+ 116   1         IP_HEADER * ip;
+ 117   1         UCHAR idata msg_type;
+C51 COMPILER V8.05a   ICMP                                                                 09/01/2010 15:06:32 PAGE 3   
+
+ 118   1         UINT idata temp;
+ 119   1         
+ 120   1         // Allow for 14 bytes eth header
+ 121   1         ip = (IP_HEADER *)(inbuf + 14);
+ 122   1              
+ 123   1         // IP header has been adjusted if necessary to always be 
+ 124   1              // 20 bytes so message starts at an offset of 34
+ 125   1         // Validate checksum of entire ICMP message incl data 
+ 126   1              temp = cksum(inbuf + 34, len);
+ 127   1              
+ 128   1              if (temp != 0xFFFF)
+ 129   1              {
+ 130   2            return; 
+ 131   2         }
+ 132   1            
+ 133   1         // Switch on the message type
+ 134   1         msg_type = *(inbuf + 34);
+ 135   1         switch(msg_type)
+ 136   1         {
+ 137   2            case 3:
+ 138   2                ;
+ 139   2            break;
+ 140   2      
+ 141   2                 case 8:
+ 142   2            ping_send(inbuf, ip->source_ipaddr, len); 
+ 143   2            break;
+ 144   2      
+ 145   2            default:
+ 146   2                ;
+ 147   2            break;
+ 148   2         }
+ 149   1      }
+ 150          
+ 151          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    460    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      29
+   IDATA SIZE       =   ----       3
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

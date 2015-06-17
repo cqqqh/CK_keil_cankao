@@ -1,0 +1,108 @@
+C51 COMPILER V8.05a   TIMER                                                                09/01/2010 15:06:33 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE TIMER
+OBJECT MODULE PLACED IN TIMER.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE TIMER.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net TIMER.C
+   6          //
+   7          // This module sets up the timer and handles the timer interrupt
+   8          //-----------------------------------------------------------------------------
+   9          #include "C8051f340.h"
+  10          #include "net.h"
+  11          #include "timer.h"
+  12          
+  13          
+  14          extern UINT volatile event_word;
+  15          extern ULONG idata initial_sequence_nr;
+  16          
+  17          
+  18          //--------------------------------------------------------------------------
+  19          // Timer 2 interrupt service routing. Intr vector location is
+  20          // address 0x002B. The timer generates an interrupt every 25 msec
+  21          // It is set to auto reload so do not need to reload it.
+  22          //--------------------------------------------------------------------------
+  23          void timer2_interrupt(void) interrupt 5
+  24          {
+  25   1              static UINT count1 = 0;
+  26   1              static UINT count2 = 0;
+  27   1              
+  28   1              TF2H = 0;               // Clear interrupt flag
+  29   1      
+  30   1              
+  31   1              // Advance the initial sequence number
+  32   1              initial_sequence_nr += 6250;
+  33   1         // Keep it some distance from rolling over
+  34   1         if (initial_sequence_nr & 0x10000000L) initial_sequence_nr = 1;
+  35   1              
+  36   1              count1++;
+  37   1              // These events happens every 0.50 seconds, not simultaneously
+  38   1              if (count1 == 5) event_word |= EVENT_ARP_RETRANSMIT;
+  39   1              
+  40   1              if (count1 == 10) event_word |= EVENT_TCP_INACTIVITY;
+  41   1              
+  42   1              if (count1 == 15) event_word |= EVENT_READ_ANALOG;
+  43   1              
+  44   1              if (count1 == 20)
+  45   1              {
+  46   2                      count1 = 0;
+  47   2                      event_word |= EVENT_TCP_RETRANSMIT;
+  48   2              }
+  49   1              
+  50   1              count2++;
+  51   1              if (count2 == 2401)
+  52   1              {
+  53   2                      // This happens every 60.025 seconds, not simultaneous
+  54   2                      // with above tasks
+  55   2                      count2 = 0;
+C51 COMPILER V8.05a   TIMER                                                                09/01/2010 15:06:33 PAGE 2   
+
+  56   2                      event_word |= EVENT_AGE_ARP_CACHE;
+  57   2              }
+  58   1      }
+  59          
+  60          
+  61          
+  62          
+  63          
+  64          //--------------------------------------------------------------------------
+  65          // Setup Timer2 in mode 1 which is 16 bit auto reload
+  66          // Intr rate = 22.1184 MHz /(12 * (65536 - reload value))
+  67          // For 25 msec reload value = 19456 = 0x4C00
+  68          //--------------------------------------------------------------------------
+  69          void init_timer2(void)
+  70          {
+  71   1              TMR2CN = 0x00;
+  72   1              TMR2RLH = 0x4C;                 // Reload value
+  73   1              TMR2RLL = 0x00;
+  74   1              TMR2H = 0x4C;                           // Initial load value
+  75   1              TMR2L = 0x00;
+  76   1              TR2 = 1;                                        // Timer 2 run
+  77   1      }
+  78          
+  79          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    192    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      4    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

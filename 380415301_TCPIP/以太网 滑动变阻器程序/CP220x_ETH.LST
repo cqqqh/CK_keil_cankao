@@ -1,0 +1,301 @@
+C51 COMPILER V7.05   CP220X_ETH                                                            07/31/2006 17:57:04 PAGE 1   
+
+
+C51 COMPILER V7.05, COMPILATION OF MODULE CP220X_ETH
+OBJECT MODULE PLACED IN CP220x_ETH.OBJ
+COMPILER INVOKED BY: C:\silabs20060419\IDEfiles\C51\BIN\C51.exe CP220x_ETH.c DB OE
+
+stmt level    source
+
+*** WARNING C500 IN LINE 1 OF CP220X_ETH.C: MISSING DEVICE (SECURITY KEY NOT FOUND)
+   1          //-----------------------------------------------------------------------------
+   2          // CP220x_ETH.c
+   3          //-----------------------------------------------------------------------------
+   4          // Copyright 2006 Silicon Laboratories, Inc.
+   5          // http://www.silabs.com
+   6          //
+   7          // Program Description:
+   8          // 
+   9          // This file contains basic send and receive functions for the CP220x.
+  10          // 
+  11          // FID:            
+  12          // Target:         Multiple
+  13          // Tool chain:     Keil C51 7.20 / Keil EVAL C51
+  14          //                 Silicon Laboratories IDE version 2.72 
+  15          // Command Line:   See Readme.txt
+  16          // Project Name:   CP220x_Ethernet_Routines
+  17          //
+  18          // 
+  19          //
+  20          // Release 1.0
+  21          //    -Initial Release (FB)
+  22          //    -30 MAY 2006
+  23          //
+  24          
+  25          //-----------------------------------------------------------------------------
+  26          // Includes
+  27          //-----------------------------------------------------------------------------
+  28          #include "global.h"
+*** WARNING C318 IN LINE 28 OF CP220x_ETH.c: can't open file 'global.h'
+  29          
+  30          //-----------------------------------------------------------------------------
+  31          // Function Prototypes
+  32          //-----------------------------------------------------------------------------
+  33          void CP220x_Send( MACADDRESS* pDestAddr, unsigned char* buffer, 
+*** ERROR C141 IN LINE 33 OF CP220X_ETH.C: syntax error near '*', expected ')'
+  34                            unsigned int buffer_length, unsigned int packet_type);
+  35          
+  36          unsigned int CP220x_Receive(unsigned char* buffer, unsigned int buffer_length);
+  37          
+  38          //-----------------------------------------------------------------------------
+  39          // CP220x_Send
+  40          //-----------------------------------------------------------------------------
+  41          // 
+  42          // Return Value : None
+  43          // Parameters   : 
+  44          //   1)  MACADDRESS* pDestAddr - destination MAC address. 
+  45          //   2)  unsigned char* buffer - address of payload. 
+  46          //   3)  unsigned int buffer_length - length of payload. 
+  47          //   4)  unsigned int packet_type - contents of Ethertype field.
+  48          //
+  49          // This function sends an IEEE 802.3 Ethernet packet using the CP220x.
+  50          // Upon entry, there should be valid data in array <buffer>.
+  51          //
+  52          //        (8 bytes)  48-bit  48-bit    16-bit   0-1500 bytes   
+C51 COMPILER V7.05   CP220X_ETH                                                            07/31/2006 17:57:04 PAGE 2   
+
+  53          //  ----------------------------------------------------------------------
+  54          // | Preamble| SFD | Dest |Source| Type/Length |Data Field | Pad |  FCS  |
+  55          // |         |     | Addr | Addr |    Field    |           |     | (CRC) |
+  56          //  ----------------------------------------------------------------------
+  57          //    supplied by  |         supplied by the MCU                 | supplied
+  58          //      CP220x     |          (minimum 64 bytes)                 | by CP220x  
+  59          //
+  60          //
+  61          //-----------------------------------------------------------------------------
+  62          void CP220x_Send( MACADDRESS* pDestAddr, unsigned char* buffer, 
+*** ERROR C141 IN LINE 62 OF CP220X_ETH.C: syntax error near '*', expected ')'
+  63                            unsigned int buffer_length, unsigned int packet_type)
+  64          {
+  65   1      
+  66   1         int i; 
+  67   1         unsigned int ramaddr;
+  68   1      
+  69   1         // Define Macro to increment the RAM address Pointer
+  70   1         #define INC_RAMADDR  ramaddr++; \
+  71   1                              RAMADDRH = (ramaddr >> 8);\
+  72   1                              RAMADDRL = (ramaddr & 0x00FF);
+  73   1      
+  74   1      
+  75   1         // Step 1: Poll TXBUSY until it becomes 0x00
+  76   1         while(TXBUSY);
+*** ERROR C202 IN LINE 76 OF CP220X_ETH.C: 'TXBUSY': undefined identifier
+  77   1      
+  78   1         // Step 2: Set the TXSTARTH:TXSTARTL address to 0x0000
+  79   1         TXSTARTH = 0x00;
+*** ERROR C202 IN LINE 79 OF CP220X_ETH.C: 'TXSTARTH': undefined identifier
+  80   1         TXSTARTL = 0x00;
+*** ERROR C202 IN LINE 80 OF CP220X_ETH.C: 'TXSTARTL': undefined identifier
+  81   1      
+  82   1      
+  83   1         // Step 3: Load data into transmit buffer
+  84   1         // When the random access method is used, we do not need to check for
+  85   1         // aborted packets. This method will be slightly slower than the Autowrite
+  86   1         // method, however, it reduces code space requirements.
+  87   1        
+  88   1            // Setup RAM Address Pointer To 0x0000    
+  89   1            RAMADDRH = 0x00;
+*** ERROR C202 IN LINE 89 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+  90   1            RAMADDRL = 0x00;
+*** ERROR C202 IN LINE 90 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+  91   1            ramaddr = 0x0000;
+  92   1      
+  93   1            // Step 3a: Load the destination address
+  94   1            for(i = 0; i < 6; i++){
+  95   2               
+  96   2               RAMTXDATA = pDestAddr->Char[i];
+*** ERROR C202 IN LINE 96 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+  97   2               INC_RAMADDR
+*** ERROR C202 IN LINE 97 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 97 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+  98   2      
+  99   2            }
+ 100   1      
+ 101   1            // Step 3b: Load the source address
+ 102   1            for(i = 0; i < 6; i++){
+ 103   2               RAMTXDATA = MYMAC.Char[i];
+*** ERROR C202 IN LINE 103 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+ 104   2               INC_RAMADDR
+C51 COMPILER V7.05   CP220X_ETH                                                            07/31/2006 17:57:04 PAGE 3   
+
+*** ERROR C202 IN LINE 104 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 104 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+ 105   2            }
+ 106   1            
+ 107   1            // Step 3c: Load the Type/Length Field
+ 108   1            RAMTXDATA = (packet_type >> 8);
+*** ERROR C202 IN LINE 108 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+ 109   1            INC_RAMADDR
+*** ERROR C202 IN LINE 109 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 109 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+ 110   1      
+ 111   1            RAMTXDATA = (packet_type & 0xFF);
+*** ERROR C202 IN LINE 111 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+ 112   1            INC_RAMADDR
+*** ERROR C202 IN LINE 112 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 112 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+ 113   1      
+ 114   1      
+ 115   1            // Step 3d: Load the packet payload
+ 116   1            for(i = 0; i < buffer_length; i++){
+*** ERROR C202 IN LINE 116 OF CP220X_ETH.C: 'buffer_length': undefined identifier
+ 117   2               RAMTXDATA = buffer[i];
+*** ERROR C202 IN LINE 117 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+ 118   2               INC_RAMADDR
+*** ERROR C202 IN LINE 118 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 118 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+ 119   2            }
+ 120   1            
+ 121   1            // Step 3e: Pad short packets
+ 122   1            while(ramaddr < 64){
+ 123   2               RAMTXDATA = 0;
+*** ERROR C202 IN LINE 123 OF CP220X_ETH.C: 'RAMTXDATA': undefined identifier
+ 124   2               INC_RAMADDR
+*** ERROR C202 IN LINE 124 OF CP220X_ETH.C: 'RAMADDRH': undefined identifier
+*** ERROR C202 IN LINE 124 OF CP220X_ETH.C: 'RAMADDRL': undefined identifier
+ 125   2            }
+ 126   1            
+ 127   1            // Set the TXENDH:TXENDL address to <ramaddr - 1>
+ 128   1            ramaddr--;
+ 129   1            TXENDH = (ramaddr >> 8);
+*** ERROR C202 IN LINE 129 OF CP220X_ETH.C: 'TXENDH': undefined identifier
+ 130   1            TXENDL = (ramaddr & 0x00FF);
+*** ERROR C202 IN LINE 130 OF CP220X_ETH.C: 'TXENDL': undefined identifier
+ 131   1      
+ 132   1      
+ 133   1         // Step 4: Set the TXSTARTH:TXSTARTL address back to 0x0000
+ 134   1         TXSTARTH = 0x00;
+*** ERROR C202 IN LINE 134 OF CP220X_ETH.C: 'TXSTARTH': undefined identifier
+ 135   1         TXSTARTL = 0x00;
+*** ERROR C202 IN LINE 135 OF CP220X_ETH.C: 'TXSTARTL': undefined identifier
+ 136   1         
+ 137   1         // Step 5: Write '1' to TXGO to begin transmission
+ 138   1         TXCN = 0x01;
+*** ERROR C202 IN LINE 138 OF CP220X_ETH.C: 'TXCN': undefined identifier
+ 139   1       
+ 140   1      }
+ 141          
+ 142          
+ 143          //-----------------------------------------------------------------------------
+ 144          // CP220x_Receive
+ 145          //-----------------------------------------------------------------------------
+ 146          // 
+C51 COMPILER V7.05   CP220X_ETH                                                            07/31/2006 17:57:04 PAGE 4   
+
+ 147          // This function reads the current packet from the CP220x receive buffer and 
+ 148          // copies it to the passed buffer. The data copied to the buffer includes the
+ 149          // 14-byte Ethernet Header and the Data Field. 
+ 150          //
+ 151          // Returns the number of bytes added to the buffer.
+ 152          //
+ 153          //        (8 bytes)  48-bit  48-bit    16-bit       0-1500 bytes   
+ 154          //  --------------------------------------------------------------------------
+ 155          // | Preamble | SFD | Dest | Source | Type/Length |  Data Field | Pad |  FCS  |
+ 156          // |          |     | Addr |  Addr  |    Field    |             |     | (CRC) |
+ 157          //  --------------------------------------------------------------------------
+ 158          //     supplied by  |           supplied by the MCU             | supplied by 
+ 159          //       CP220x     |                                           |    CP220x  
+ 160          //-----------------------------------------------------------------------------
+ 161          unsigned int CP220x_Receive(unsigned char* buffer, unsigned int buffer_length)
+ 162          {
+ 163   1         bit rx_ok;
+ 164   1         bit skip = 0;
+ 165   1         UINT cplen;   
+*** ERROR C202 IN LINE 165 OF CP220X_ETH.C: 'UINT': undefined identifier
+*** ERROR C141 IN LINE 165 OF CP220X_ETH.C: syntax error near 'cplen'
+ 166   1         unsigned int i;
+*** ERROR C141 IN LINE 166 OF CP220X_ETH.C: syntax error near 'unsigned'
+*** ERROR C202 IN LINE 166 OF CP220X_ETH.C: 'i': undefined identifier
+ 167   1      
+ 168   1         // Step 1: Check the RXOK bit to see if packet was received correctly
+ 169   1         rx_ok = (CPINFOL & RXOK) && (CPINFOH & RXVALID);
+*** ERROR C202 IN LINE 169 OF CP220X_ETH.C: 'CPINFOL': undefined identifier
+ 170   1         
+ 171   1         // Step 2: If packet received correctly, read the length, otherwise, skip packet.
+ 172   1         if(rx_ok){
+ 173   2         
+ 174   2            // Read the packet length
+ 175   2            cplen.Char[0] = CPLENH;
+*** ERROR C202 IN LINE 175 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 176   2            cplen.Char[1] = CPLENL;
+*** ERROR C202 IN LINE 176 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 177   2              
+ 178   2         } else {
+ 179   2           
+ 180   2            // Set packet length to zero
+ 181   2            cplen.Int = 0;
+*** ERROR C202 IN LINE 181 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 182   2            
+ 183   2            // Skip packet
+ 184   2            skip = 1;      
+ 185   2         }   
+ 186   1      
+ 187   1         // Step 3: Read the entire packet from the buffer 
+ 188   1         
+ 189   1         // If packet will fit in the buffer
+ 190   1         if(buffer_length >= cplen.Int){
+*** ERROR C202 IN LINE 190 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 191   2            
+ 192   2            // Copy entire packet
+ 193   2            for(i = 0; i < cplen.Int; i++){
+*** ERROR C202 IN LINE 193 OF CP220X_ETH.C: 'i': undefined identifier
+ 194   3               *buffer++ = RXAUTORD;
+*** ERROR C202 IN LINE 194 OF CP220X_ETH.C: 'RXAUTORD': undefined identifier
+ 195   3            }
+ 196   2      
+ 197   2         } else {
+C51 COMPILER V7.05   CP220X_ETH                                                            07/31/2006 17:57:04 PAGE 5   
+
+ 198   2      
+ 199   2            // Set packet length to zero
+ 200   2            cplen.Int = 0;
+*** ERROR C202 IN LINE 200 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 201   2            
+ 202   2            // Skip packet
+ 203   2            skip = 1; 
+ 204   2         }
+ 205   1            
+ 206   1         // Step 4: Skip the packet, or clear the valid bit if the entire packet
+ 207   1         // has been unloaded from the buffer.
+ 208   1         
+ 209   1         if(skip)
+ 210   1         {
+ 211   2            RXCN |= 0x02;                    // Skip the packet
+*** ERROR C202 IN LINE 211 OF CP220X_ETH.C: 'RXCN': undefined identifier
+ 212   2         } 
+ 213   1      
+ 214   1         else 
+ 215   1         {
+ 216   2            RXCN |= 0x04;                    // Clear the valid bit only
+*** ERROR C202 IN LINE 216 OF CP220X_ETH.C: 'RXCN': undefined identifier
+ 217   2         }
+ 218   1      
+ 219   1         // If there are no more packets in the receive buffer, enable reception
+ 220   1         if(TLBVALID == 0x00)
+*** ERROR C202 IN LINE 220 OF CP220X_ETH.C: 'TLBVALID': undefined identifier
+ 221   1         {
+ 222   2            RXCN = 0x00;   
+*** ERROR C202 IN LINE 222 OF CP220X_ETH.C: 'RXCN': undefined identifier
+ 223   2         }
+ 224   1         
+ 225   1         // Return the number of bytes added to the buffer
+ 226   1         return cplen.Int;
+*** ERROR C202 IN LINE 226 OF CP220X_ETH.C: 'cplen': undefined identifier
+ 227   1      }
+ 228          
+ 229          
+ 230          //-----------------------------------------------------------------------------
+ 231          // End Of File
+ 232          //-----------------------------------------------------------------------------
+
+C51 COMPILATION COMPLETE.  2 WARNING(S),  48 ERROR(S)

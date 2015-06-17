@@ -1,0 +1,974 @@
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN MAIN.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE MAIN.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //---------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net MAIN.C
+   6          //
+   7          // 8051 Web Server project
+   8          // See Makefile for build notes 
+   9          // Written for Keil C51 V5.1 compiler, notes:
+  10          //   It uses big endian order, which is the same as the
+  11          //   network byte order, unlike x86 systems.
+  12          //   Use OPTIMIZE(2)or higher so that automatic variables get shared
+  13          //   between functions, to stay within the 256 bytes idata space
+  14          //---------------------------------------------------------------------------
+  15          
+  16          #include <string.h>
+  17          //#include <stdlib.h>
+  18          #include "C8051f340.h"
+  19          #include "net.h"
+  20          //#include "eth.h"
+  21          #include "cp220x_reg.h"
+  22          #include "timer.h"
+  23          #include "analog.h"
+  24          #include "arp.h"
+  25          #include "tcp.h"
+  26          #include "http.h"
+  27          #include "ip.h"
+  28          MACADDRESS xdata MYMAC; 
+  29          sbit AB4_RST = P1^0;                        // Set P1.0 High
+  30          
+  31          
+  32          UINT idata air_temperature=1;
+  33          
+  34          // Global variables
+  35          UINT volatile event_word;
+  36          char xdata text[20];  
+  37          UCHAR idata debug;
+  38          UCHAR idata rcve_buf_allocated;
+  39          #define LINK_ERROR  0x20
+  40          char xdata inbuf1[1500] _at_ 1000;
+  41          char xdata outbuf1[1500] _at_ 2500;
+  42          
+  43          // This sets my hardware address to 00:01:02:03:04:05
+  44          UCHAR xdata my_hwaddr[6] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05}; 
+  45          
+  46          // Hardware addr to send a broadcast
+  47          UCHAR code broadcast_hwaddr[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  48          
+  49          // This sets my IP address to 192.168.0.10
+  50          ULONG code  my_ipaddr = 0xC0A8837EL;       //192.168.131.126
+  51          
+  52          // This sets my subnet mask to 255.255.255.0
+  53          ULONG code my_subnet = 0xFFFFFF00L;
+  54          
+  55          // Set to 0 if no gateway is present on network
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 2   
+
+  56          ULONG code gateway_ipaddr = 0xC0A883FEL;  //192.168.131.254
+  57          
+  58          //--------------------------------------------------------------------------
+  59          // Initialize the memory management routines
+  60          // Initialize variables declared in main
+  61          //--------------------------------------------------------------------------
+  62          
+  63          unsigned int Count1msInc;
+  64          unsigned char Count1ms,Count10ms,Count1s;
+  65          unsigned char TimeSecond,TimeMinute;
+  66          unsigned char PHY_Init(void);
+  67          void MAC_Init(void);
+  68          UCHAR xdata * rcve_frame(void);
+  69          void eth_rcve(UCHAR xdata * inbuf);
+  70          void MAC_Write(unsigned char mac_reg_offset, unsigned int mac_reg_data);
+  71          void MAC_SetAddress(MACADDRESS* pMAC);
+  72          void CP220x_Send( UCHAR xdata * outbuf, UINT len);
+  73          
+  74          
+  75          void int2str(int x, char* str)
+  76          {
+  77   1          int i=1;
+  78   1          int tmp=10;
+  79   1          while(x/tmp!=0)
+  80   1          {
+  81   2              i++;
+  82   2              tmp*=10;
+  83   2          }
+  84   1          tmp=x;
+  85   1          str[i]='\0';
+  86   1          while(i>1)
+  87   1          {
+  88   2              str[--i]='0'+(tmp%10);
+  89   2              tmp/=10;
+  90   2          }
+  91   1          str[0]=tmp+'0';
+  92   1      }
+  93          
+  94          void init_main(void)
+  95          {
+  96   1              // Start the memory pool for incoming and outgoing Ethernet
+  97   1              // frames at 1000, with length = 1500 bytes. Memory below 500
+  98   1              // is used for program variables
+  99   1      //      init_mempool((void xdata *)1000, 1500);
+ 100   1              memset(text, 0, sizeof(text));
+ 101   1              event_word = 0;
+ 102   1              rcve_buf_allocated = FALSE;
+ 103   1              debug = FALSE;
+ 104   1      }
+ 105          
+ 106          void PORT_Init (void)
+ 107          {
+ 108   1          XBR0    = 0x01;                     // Enable UART on P0.4(TX) and P0.5(RX)
+ 109   1          P0MDIN    = 0xFC;
+ 110   1          P0SKIP    = 0x03;
+ 111   1      
+ 112   1         XBR1    = 0x40;                     // Enable Crossbar and weak pull-ups
+ 113   1         P0MDOUT |= 0x10;                    // Enable TX0 as push-pull output
+ 114   1         P1MDOUT |= 0xC0;                    // /WR and /RD are push-pull
+ 115   1         P1MDOUT |= 0x02;                                        //P2.5 are push_pull
+ 116   1         P1MDOUT |= 0x18;                    // AB4 LEDs are push-pull
+ 117   1         P1MDOUT &= ~0x01;                   // /RST is open-drain
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 3   
+
+ 118   1            
+ 119   1         // Configure External Memory Interface Pins to push-pull except for
+ 120   1         // P2.0 and P2.1 which are used for target board switches.
+ 121   1         P2MDOUT |= 0xFC;                    // ADDR[15:8]
+ 122   1      
+ 123   1         P1MDIN   = 0xFD;                    // P1.2 为模拟输入
+ 124   1         P1SKIP   = 0x02;                    // P1.2 跳过
+ 125   1      
+ 126   1         P3MDOUT |= 0xFF;                    // ADDR[7:0]
+ 127   1         P4MDOUT |= 0xFF;                    // DATA[7:0]
+ 128   1         
+ 129   1         // Set initial values of External Memory Interface Pins
+ 130   1      /*   P1 = 0xFE;                          // /WR, /RD, are high, RESET is low
+ 131   1         P1 &= ~0x18;                        // LEDs off
+ 132   1         P2 = 0xFF;                          // ADDR[15:8] initially high 
+ 133   1         P3 = 0xFF;                          // ADDR[7:0] initially high
+ 134   1         P4 = 0xFF;  */                        // DATA[7:0] intially high
+ 135   1       EMI0CF = 0x0B;                      // non-muxed mode; split mode 
+ 136   1                                             // with bank select
+ 137   1        EMI0TC = 0xFF;                      // slowest timing (4-cycle MOVX)
+ 138   1      
+ 139   1      //   EMI0CN = 0x20;                      // Off-chip
+ 140   1      }
+ 141          
+ 142          
+ 143          
+ 144          void Timer0_Init (void)
+ 145          {
+ 146   1              CKCON|=0x8;
+ 147   1              TMOD|=0x1;      //16Bit
+ 148   1      
+ 149   1              Count10ms=10;
+ 150   1              Count1s=0;
+ 151   1              TR0 = 0;                                    // STOP Timer0
+ 152   1              TH0 = (-SYSCLK/1000/12) >> 8;                   // set Timer0 to overflow in 1ms
+ 153   1              TL0 = -SYSCLK/1000/12;
+ 154   1              TR0 = 1;        // START Timer0
+ 155   1              IE|= 0x2; 
+ 156   1      }
+ 157          void SYSCLK_Init (void)
+ 158          {
+ 159   1          unsigned int iTmp;
+ 160   1      
+ 161   1          //Enable internal high speed oscillator
+ 162   1          OSCICN |= 0x83;
+ 163   1          //Enable internal 4X MULL
+ 164   1          if( !( CLKMUL & ( 1<<5 ) ) )
+ 165   1          {
+ 166   2              CLKMUL = 0;
+ 167   2              CLKMUL = 0x00;
+ 168   2              CLKMUL |= ( 1<<7 );
+ 169   2              for( iTmp = 0; iTmp < 200; iTmp ++ );
+ 170   2              CLKMUL |= ( 1<<6 ) | ( 1<<7 );
+ 171   2              for( iTmp = 0; iTmp < 2000; iTmp ++ );
+ 172   2              while( !( CLKMUL & ( 1<<5 ) ) );
+ 173   2          }
+ 174   1          //USB clock: 48MHz, system clock : 48MHz
+ 175   1          CLKSEL = 0x03;
+ 176   1      }
+ 177          
+ 178          
+ 179          void UART0_Init (void)
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 4   
+
+ 180          {
+ 181   1         SCON0    |= 0x10;                                                            
+ 182   1         CKCON     = 0x70;
+ 183   1         TH1       = 0x30;                    //波特率为９６００
+ 184   1         TL1       = TH1;                         
+ 185   1         TMOD      = 0x20;                     
+ 186   1         TR1       = 1;                           
+ 187   1         TI0       = 1; 
+ 188   1         ES0=1;                       
+ 189   1      } 
+ 190          
+ 191          
+ 192          
+ 193          
+ 194          
+ 195          //-----------------------------------------------------
+ 196          
+ 197          // 函数功能：循环方式发送字符串
+ 198          
+ 199          // 输出参数：pSendString,char*:欲发送的字符串的缓冲区
+ 200          
+ 201          // 输出：无
+ 202          
+ 203          //-----------------------------------------------------
+ 204          
+ 205          void SendString(char *pSendString)
+ 206          
+ 207          {
+ 208   1      
+ 209   1              // 循环发送，首先关闭中断
+ 210   1      
+ 211   1              ES0 =0;
+ 212   1      
+ 213   1              while(*pSendString!=0)
+ 214   1              {
+ 215   2      
+ 216   2                      SBUF0 = *pSendString;
+ 217   2      
+ 218   2                      pSendString++;
+ 219   2      
+ 220   2                      while(TI0==0);
+ 221   2      
+ 222   2                      TI0=0;
+ 223   2      
+ 224   2              }
+ 225   1              ES0=1;
+ 226   1      
+ 227   1      }  
+ 228          
+ 229          
+ 230          
+ 231          void serial () interrupt 4 
+ 232          
+ 233          {    
+ 234   1      
+ 235   1         if(RI0)
+ 236   1      
+ 237   1        { RI0=0;
+ 238   2      
+ 239   2         air_temperature=SBUF0;
+ 240   2      
+ 241   2        }
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 5   
+
+ 242   1        else
+ 243   1        TI0=0;
+ 244   1      
+ 245   1      }
+ 246          
+ 247          
+ 248          
+ 249          void Timer0_ISR (void) interrupt 1  //1ms
+ 250          {
+ 251   1              TH0 = (-SYSCLK/1000/12) >> 8;  
+ 252   1              TL0 = -SYSCLK/1000/12;
+ 253   1              if (Count1ms) Count1ms--;
+ 254   1              Count1msInc++;
+ 255   1              if (Count10ms) Count10ms--;
+ 256   1              else
+ 257   1              {
+ 258   2                      Count10ms=10;                           //10ms
+ 259   2                      if (Count1s) Count1s--;
+ 260   2                      else
+ 261   2                      {
+ 262   3                              Count1s=100;                    //1s
+ 263   3                              TimeSecond++;
+ 264   3                              if (TimeSecond>=60)
+ 265   3                              {
+ 266   4                                      TimeSecond=0;           //1min
+ 267   4                                      TimeMinute++;
+ 268   4                                      if      (TimeMinute==60)        TimeMinute=0;
+ 269   4                              }
+ 270   3                      }
+ 271   2              }
+ 272   1      }
+ 273          
+ 274          
+ 275          void Delay1ms(unsigned char T)
+ 276          {
+ 277   1              Count1ms=T;
+ 278   1              while (Count1ms);
+ 279   1      }
+ 280          
+ 281            
+ 282          
+ 283          void LightONOFF(bit b)
+ 284          {
+ 285   1        b=1;
+ 286   1      }
+ 287          
+ 288          void CP220x_RST_Low(void);
+ 289                  //加延时
+ 290           void   CP220x_RST_High(void);
+ 291          
+ 292          
+ 293          
+ 294          
+ 295          //////////////////////////////////////////////////////////////////////
+ 296          void main (void)
+ 297          {
+ 298   1              UINT  event_word_copy;
+ 299   1              UCHAR xdata * inbuf;
+ 300   1              unsigned char error_code;
+ 301   1      //      unsigned int num_bytes;
+ 302   1                      
+ 303   1          PCA0MD &= ~0x40;                    // WDTE = 0 (clear watchdog timer
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 6   
+
+ 304   1                                             // enable)
+ 305   1      
+ 306   1      
+ 307   1              SYSCLK_Init ();                     // initialize oscillator
+ 308   1              Timer0_Init();
+ 309   1              PORT_Init ();                       // initialize crossbar and GPIO
+ 310   1          UART0_Init();
+ 311   1         
+ 312   1              init_timer2();
+ 313   1              init_main();
+ 314   1              init_tcp();
+ 315   1              init_http();
+ 316   1              EA=1;
+ 317   1              init_adc();
+ 318   1              init_arp();
+ 319   1              //init_8019();
+ 320   1              CP220x_RST_Low();
+ 321   1              //加延时
+ 322   1              
+ 323   1         Delay1ms(200);
+ 324   1          CP220x_RST_High();
+ 325   1              
+ 326   1        
+ 327   1         Delay1ms(200);
+ 328   1      
+ 329   1          INT0EN = 0x03;                         
+ 330   1         INT1EN = 0x00;
+ 331   1         
+ 332   1         // Clear all Interrupt Flags by reading the self-clearing status registers                          
+ 333   1      //   temp_char = INT0;                      
+ 334   1       //  temp_char = INT1;  
+ 335   1         error_code = PHY_Init();  
+ 336   1         Delay1ms(50);
+ 337   1         Delay1ms(50);
+ 338   1         MAC_Init();    
+ 339   1         Delay1ms(50);
+ 340   1         Delay1ms(50);
+ 341   1        
+ 342   1              ET2 = 1;                            // Enable timer 2 interrupt
+ 343   1                RXCN = RXCLEAR;
+ 344   1            EA  =  1;
+ 345   1      
+ 346   1                Delay1ms(50);
+ 347   1                Delay1ms(50);
+ 348   1                Delay1ms(50);
+ 349   1                Delay1ms(50);
+ 350   1         Delay1ms(50);
+ 351   1          IP        = 0x01;
+ 352   1      
+ 353   1        SendString("start");          
+ 354   1         // The code below is a priority based RTOS.  The event
+ 355   1         // handlers are in priority order - highest priority first.
+ 356   1              while (1)
+ 357   1         {
+ 358   2            // Query CS8900A to see if Ethernet frame has arrived
+ 359   2            // If so, set EVENT_ETH_ARRIVED bit in event_word
+ 360   2           // query_8019();
+ 361   2              /* 12.2. Reading a Packet Using the Autoread Interface
+ 362   2      Once reset initialization is complete (Section 6.2 on page 18) and the receive buffer, filter, and hash ta
+             -ble (Section
+ 363   2      12.4) are initialized, the CP2200/1 is ready to receive Ethernet packets. After receiving notification of 
+             -a new packet,
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 7   
+
+ 364   2      the following procedure can be used to read the packet:
+ 365   2      Step 1: Read RXVALID (CPINFOH.7) and RXOK (CPINFOL.7) to check if the current packet was received
+ 366   2      correctly. The host processor may optionally use the packet starting address CPADDR to read
+ 367   2      specific bytes in the packet and determine whether to copy or skip the current packet. The random
+ 368   2      access method described in Section 7.1 on page 23 can be used to access the buffer.
+ 369   2      Step 2: If RXVALID or RXOK is 0, or to skip the packet, write a ‘1’ to RXSKIP (RXCN.1).
+ 370   2      If RXVALID and RXOK are 1, read the length of the current packet from CPLENH:CPLENL.
+ 371   2      Step 3: Read the entire packet, one byte at a time, by reading RXAUTORD.
+ 372   2      Step 4: If the entire packet was read, write a ‘1’ to RXCLRV (RXCN.2).
+ 373   2      If there are any unread bytes remaining in the current buffer, write a ‘1’ to RXSKIP (RXCN.1).*/
+ 374   2                if(CPINFOH & RXVALID)  //CPINFOH的第7位 
+ 375   2            event_word |= EVENT_ETH_ARRIVED;
+ 376   2            // Use a copy of event word to avoid interference
+ 377   2            // with interrupts
+ 378   2                      event_word_copy = event_word;
+ 379   2                      EA = 1;
+ 380   2            
+ 381   2            // See if an Ethernet frame has arrived      
+ 382   2            if (event_word_copy & EVENT_ETH_ARRIVED)
+ 383   2            {
+ 384   3               EA = 0;
+ 385   3               event_word &= (~EVENT_ETH_ARRIVED);
+ 386   3               EA = 1;
+ 387   3               
+ 388   3               // Allocate a buffer and read frame from CS8900A
+ 389   3              //       inbuf = (UCHAR xdata *)malloc(1000);
+ 390   3              //       num_bytes = CP220x_Receive(inbuf, sizeof(inbuf));
+ 391   3               inbuf = rcve_frame();
+ 392   3                 if (inbuf != NULL)
+ 393   3               {
+ 394   4      
+ 395   4                  // Process the received Ethernet frame 
+ 396   4                  eth_rcve(inbuf); 
+ 397   4               
+ 398   4                  // If the memory allocated for the rcve message has
+ 399   4                  // not already been freed then free it now
+ 400   4                  if (rcve_buf_allocated)
+ 401   4                  {
+ 402   5      //               free(inbuf);
+ 403   5                     rcve_buf_allocated = FALSE;
+ 404   5                  }
+ 405   4               }
+ 406   3                
+ 407   3               
+ 408   3                
+ 409   3             
+ 410   3            }
+ 411   2            
+ 412   2            // See if TCP retransmit timer has expired                       
+ 413   2            else if (event_word_copy & EVENT_TCP_RETRANSMIT)
+ 414   2            {
+ 415   3               event_word &= (~EVENT_TCP_RETRANSMIT);
+ 416   3               EA = 1;
+ 417   3               tcp_retransmit();
+ 418   3                      }
+ 419   2      
+ 420   2            // See if TCP inactivity timer has expired
+ 421   2            else if (event_word_copy & EVENT_TCP_INACTIVITY)
+ 422   2            {
+ 423   3               event_word &= (~EVENT_TCP_INACTIVITY);
+ 424   3               EA = 1;
+ 425   3               tcp_inactivity();
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 8   
+
+ 426   3                      }
+ 427   2      
+ 428   2            // See if ARP retransmit timer has expired
+ 429   2                      else if (event_word_copy & EVENT_ARP_RETRANSMIT)
+ 430   2            {
+ 431   3               event_word &= (~EVENT_ARP_RETRANSMIT);
+ 432   3               EA = 1;
+ 433   3               arp_retransmit();
+ 434   3                      }
+ 435   2      
+ 436   2            // See if it is time to age the ARP cache
+ 437   2            else if (event_word_copy & EVENT_AGE_ARP_CACHE)
+ 438   2            {
+ 439   3               event_word &= (~EVENT_AGE_ARP_CACHE);
+ 440   3                              EA = 1;
+ 441   3               age_arp_cache();
+ 442   3                      }
+ 443   2      
+ 444   2                      // See if it is time to read the analog inputs
+ 445   2                      else if (event_word_copy & EVENT_READ_ANALOG)
+ 446   2            {
+ 447   3               event_word &= (~EVENT_READ_ANALOG);
+ 448   3               EA = 1;
+ 449   3                              // Read one of the 3 analog inputs each time
+ 450   3                              read_analog_inputs();
+ 451   3            }
+ 452   2      
+ 453   2                      // See if an RS232 message has arrived.  It is
+ 454   2            // not handled - RS232 is used for sending only
+ 455   2                      else if (event_word_copy & EVENT_RS232_ARRIVED)
+ 456   2            {
+ 457   3               event_word &= (~EVENT_RS232_ARRIVED);
+ 458   3               EA = 1;
+ 459   3            }
+ 460   2         }
+ 461   1      }
+ 462          
+ 463          void CP220x_RST_Low(void)
+ 464          {
+ 465   1       
+ 466   1      }
+ 467          
+ 468          void CP220x_RST_High(void)
+ 469          {
+ 470   1       
+ 471   1      }
+ 472          
+ 473          unsigned char PHY_Init()
+ 474          {
+ 475   1         unsigned char temp_char;
+ 476   1         unsigned char retval = 0;
+ 477   1         
+ 478   1         //--------------------------------------------------------------------------
+ 479   1         // Auto-Negotiation Synchronization (Section 15.2 of CP220x Datasheet)
+ 480   1         //--------------------------------------------------------------------------
+ 481   1      
+ 482   1         // Step 1: Disable the PHY
+ 483   1         PHYCN = 0x00;  
+ 484   1         
+ 485   1         // Step 2: Enable the PHY with link integrity test and auto-negotiation 
+ 486   1         // turned off
+ 487   1            
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 9   
+
+ 488   1            // A. Disable the Transmitter Power Save Option and Configure Options
+ 489   1            TXPWR = 0x80;
+ 490   1            PHYCF = ( SMSQ | JABBER | ADPAUSE | AUTOPOL );
+ 491   1      
+ 492   1            // B. Enable the Physical Layer
+ 493   1            PHYCN = PHYEN;
+ 494   1         Delay1ms(200);
+ 495   1         Delay1ms(200);
+ 496   1         Delay1ms(200);
+ 497   1            // C. Wait for the physical layer to power up
+ 498   1           // wait_ms(10);
+ 499   1      
+ 500   1            // D. Enable the Transmitter and Receiver
+ 501   1            PHYCN = ( PHYEN | TXEN | RXEN );
+ 502   1         
+ 503   1         // Step 3: Poll the Wake-on-Lan Interrupt
+ 504   1            Delay1ms(200);
+ 505   1        
+ 506   1            // A. Clear Interrupt Flags
+ 507   1            temp_char = INT1;
+ 508   1      
+ 509   1            // B. Start a new timeout for 1.5 seconds
+ 510   1      //      reset_timeout(ONE_SECOND+ONE_SECOND/2);
+ 511   1            
+ 512   1            // C. Check for a signal
+ 513   1           
+ 514   1               // If no signal is deteced, wait 1.5s, then continue
+ 515   1      //         if(timeout_expired()){
+ 516   1      //            break;
+ 517   1       //        }
+ 518   1      
+ 519   1           
+ 520   1      
+ 521   1         //--------------------------------------------------------------------------
+ 522   1         // Physical Layer Initialization (Section 15.7 of CP220x Datasheet)
+ 523   1         //--------------------------------------------------------------------------
+ 524   1         
+ 525   1         // Step 1: Synchronization procedure implemented above
+ 526   1      
+ 527   1         // Step 2: Disable the physical layer
+ 528   1         PHYCN = 0x00; 
+ 529   1        
+ 530   1         // Step 3: Configure the desired physical layer options including 
+ 531   1         // auto-negotiation and link integrity
+ 532   1         PHYCF = ( SMSQ | LINKINTG | JABBER | AUTONEG | ADPAUSE | AUTOPOL );
+ 533   1        
+ 534   1         // Step 4: Enable the physcial layer
+ 535   1            
+ 536   1            // A. Enable the Physical Layer
+ 537   1            PHYCN = PHYEN;
+ 538   1       Delay1ms(200);
+ 539   1         Delay1ms(200);
+ 540   1         Delay1ms(200);
+ 541   1            // B. Wait for the physical layer to power up
+ 542   1      //      wait_ms(10);
+ 543   1      
+ 544   1            // C. Enable the Transmitter and Receiver
+ 545   1            // Auto-negotiation begins now
+ 546   1            PHYCN = ( PHYEN | TXEN | RXEN );
+ 547   1        
+ 548   1      
+ 549   1         // Step 5: Wait for auto-negotiation to complete
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 10  
+
+ 550   1      
+ 551   1            // Clear INT1 Interrupt Flags
+ 552   1            temp_char = INT1;
+ 553   1              Delay1ms(200);
+ 554   1         Delay1ms(200);
+ 555   1         
+ 556   1            // Start a six second timeout
+ 557   1      //      reset_timeout(6*ONE_SECOND);
+ 558   1        
+ 559   1            // Check for autonegotiation fail or complete flag
+ 560   1            while(1){
+ 561   2               // If Auto-Negotiation Completes/Fails, break
+ 562   2               if(INT1RD & (ANCINT | ANFINT)){
+ 563   3                  break;            
+ 564   3               }
+ 565   2            
+ 566   2             
+ 567   2            }
+ 568   1      
+ 569   1      
+ 570   1            // Mask out all bits except for auto negotiation bits 
+ 571   1            temp_char = INT1RD;
+ 572   1            temp_char &= (ANCINT | ANFINT);
+ 573   1      
+ 574   1            // Check if Auto-Negotiation has FAILED 
+ 575   1            if(temp_char & ANFINT){
+ 576   2            
+ 577   2               // Auto-Negotiation has failed
+ 578   2               retval = LINK_ERROR;
+ 579   2      
+ 580   2              
+ 581   2         
+ 582   2            } else 
+ 583   1         
+ 584   1            // Check if Auto-Negotiation has PASSED   
+ 585   1            if(temp_char == ANCINT){
+ 586   2            
+ 587   2               // Auto-Negotiation has passed
+ 588   2               retval = 0;
+ 589   2      
+ 590   2               // Enable Link LED and Activity LED                         
+ 591   2               IOPWR = 0x0C;   
+ 592   2               
+ 593   2                                 
+ 594   2      
+ 595   2            } else 
+ 596   1         
+ 597   1            // Timeout Occured.   
+ 598   1            { 
+ 599   2                // Timeout
+ 600   2               retval = LINK_ERROR;
+ 601   2          
+ 602   2              
+ 603   2            }
+ 604   1      
+ 605   1         return retval;
+ 606   1           
+ 607   1      }
+ 608          
+ 609          void MAC_Init(void)
+ 610          {  
+ 611   1      
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 11  
+
+ 612   1         // Check the duplex mode and perform duplex-mode specific initializations
+ 613   1         if(PHYCN & 0x10){
+ 614   2            
+ 615   2            // The device is in full-duplex mode, configure MAC registers
+ 616   2            // Padding is turned on.
+ 617   2            MAC_Write(MACCF, 0x40B3);
+ 618   2            MAC_Write(IPGT, 0x0015);
+ 619   2            
+ 620   2         } else {
+ 621   2      
+ 622   2            // The device is in half-duplex mode, configure MAC registers
+ 623   2            // Padding is turned off.
+ 624   2            MAC_Write(MACCF, 0x4012);
+ 625   2            MAC_Write(IPGT, 0x0012);
+ 626   2      
+ 627   2         }
+ 628   1      
+ 629   1         // Configure the IPGR register
+ 630   1         MAC_Write(IPGR, 0x0C12);
+ 631   1      
+ 632   1         // Configure the MAXLEN register to 1518 bytes
+ 633   1         MAC_Write(MAXLEN, 0x05EE);
+ 634   1      
+ 635   1         // Copy MAC Address Stored in Flash to MYMAC
+ 636   1         FLASHADDRH = 0x1F;
+ 637   1         FLASHADDRL = 0xFA;
+ 638   1      
+ 639   1         MYMAC.Char[0] = FLASHAUTORD;
+ 640   1         MYMAC.Char[1] = FLASHAUTORD;
+ 641   1         MYMAC.Char[2] = FLASHAUTORD;
+ 642   1         MYMAC.Char[3] = FLASHAUTORD;
+ 643   1         MYMAC.Char[4] = FLASHAUTORD;
+ 644   1         MYMAC.Char[5] = FLASHAUTORD;      
+ 645   1         my_hwaddr[0]=MYMAC.Char[0];
+ 646   1         my_hwaddr[1]=MYMAC.Char[1];
+ 647   1         my_hwaddr[2]=MYMAC.Char[2];
+ 648   1         my_hwaddr[3]=MYMAC.Char[3];
+ 649   1         my_hwaddr[4]=MYMAC.Char[4];
+ 650   1         my_hwaddr[5]=MYMAC.Char[5];
+ 651   1         // Program the MAC address
+ 652   1         MAC_SetAddress(&MYMAC); 
+ 653   1      
+ 654   1         // Enable Reception and configure Loopback mode
+ 655   1         MAC_Write(MACCN, 0x0001);           // Enable Reception without loopback
+ 656   1      
+ 657   1      }
+ 658          
+ 659          void MAC_Write(unsigned char mac_reg_offset, unsigned int mac_reg_data)
+ 660          {
+ 661   1      
+ 662   1         // Step 1: Write the address of the indirect register to MACADDR.
+ 663   1         MACADDR = mac_reg_offset;              
+ 664   1      
+ 665   1         // Step 2: Copy the contents of <mac_reg_data> to MACDATAH:MACDATAL
+ 666   1         MACDATAH = (mac_reg_data >> 8);    // Copy High Byte
+ 667   1         MACDATAL = (mac_reg_data & 0xFF);  // Copy Low Byte
+ 668   1      
+ 669   1         // Step 3: Perform a write on MACRW to transfer the contents of MACDATAH:MACDATAL
+ 670   1         // to the indirect MAC register.
+ 671   1         MACRW = 0;
+ 672   1         
+ 673   1         return;
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 12  
+
+ 674   1      }
+ 675          
+ 676          
+ 677          //-----------------------------------------------------------------------------
+ 678          // MAC_SetAddress
+ 679          //-----------------------------------------------------------------------------
+ 680          //
+ 681          // Return Value : None
+ 682          // Parameters   : 
+ 683          //   1)  MACADDRESS* pMAC - pointer to a 6-byte MAC address structure.
+ 684          // 
+ 685          // Sets the current MAC address to the MAC address pointed to by <pMAC>.
+ 686          //-----------------------------------------------------------------------------
+ 687          void MAC_SetAddress(MACADDRESS* pMAC)
+ 688          {
+ 689   1         UINT1 temp_int;
+ 690   1      
+ 691   1         temp_int.Char[0] = pMAC->Char[5];
+ 692   1         temp_int.Char[1] = pMAC->Char[4];
+ 693   1         MAC_Write(MACAD0, temp_int.Int);
+ 694   1         
+ 695   1         temp_int.Char[0] = pMAC->Char[3];
+ 696   1         temp_int.Char[1] = pMAC->Char[2];
+ 697   1         MAC_Write(MACAD1, temp_int.Int);
+ 698   1         
+ 699   1         temp_int.Char[0] = pMAC->Char[1];
+ 700   1         temp_int.Char[1] = pMAC->Char[0];
+ 701   1         MAC_Write(MACAD2, temp_int.Int);
+ 702   1         
+ 703   1         return;
+ 704   1      }
+ 705          
+ 706          
+ 707          
+ 708          void eth_rcve(UCHAR xdata * inbuf)
+ 709          {
+ 710   1         ETH_HEADER xdata * eth;
+ 711   1         
+ 712   1         eth = (ETH_HEADER xdata *)inbuf;
+ 713   1         
+ 714   1         // Reject frames in IEEE 802 format where Eth type field
+ 715   1         // is used for length.  Todo: Make it handle this format
+ 716   1         if (eth->frame_type < 1520)
+ 717   1         {
+ 718   2      //      free(inbuf);
+ 719   2            return;      
+ 720   2         }
+ 721   1      
+ 722   1         // Figure out what type of frame it is from Eth header
+ 723   1         // Call appropriate handler and supply address of buffer
+ 724   1         switch (eth->frame_type)
+ 725   1         {
+ 726   2                 case ARP_PACKET:
+ 727   2                 arp_rcve(inbuf);
+ 728   2                 break;
+ 729   2                            
+ 730   2                 case IP_PACKET:
+ 731   2                 ip_rcve(inbuf);
+ 732   2            break;
+ 733   2      
+ 734   2            default:
+ 735   2                      ;
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 13  
+
+ 736   2            break;
+ 737   2         }
+ 738   1      }
+ 739          
+ 740          
+ 741          void eth_send(UCHAR xdata * outbuf, UCHAR * hwaddr, UINT ptype, UINT len)
+ 742          {
+ 743   1              ETH_HEADER xdata * eth;
+ 744   1         
+ 745   1         eth = (ETH_HEADER xdata *)outbuf;
+ 746   1                
+ 747   1              // Add 14 byte Ethernet header
+ 748   1              memcpy(eth->dest_hwaddr, hwaddr, 6);
+ 749   1              memcpy(eth->source_hwaddr, my_hwaddr, 6); 
+ 750   1         eth->frame_type = ptype;
+ 751   1      
+ 752   1         // We just added 14 bytes to length
+ 753   1         CP220x_Send(outbuf, len + 14);
+ 754   1      }
+ 755          
+ 756          void CP220x_Send( UCHAR xdata * outbuf, UINT len)
+ 757          {
+ 758   1      
+ 759   1         int i; 
+ 760   1         unsigned int ramaddr;
+ 761   1      
+ 762   1         // Define Macro to increment the RAM address Pointer
+ 763   1         #define INC_RAMADDR  ramaddr++; \
+ 764   1                              RAMADDRH = (ramaddr >> 8);\
+ 765   1                              RAMADDRL = (ramaddr & 0x00FF);
+ 766   1      
+ 767   1      
+ 768   1         // Step 1: Poll TXBUSY until it becomes 0x00
+ 769   1         while(TXBUSY);
+ 770   1      
+ 771   1         // Step 2: Set the TXSTARTH:TXSTARTL address to 0x0000
+ 772   1         TXSTARTH = 0x00;
+ 773   1         TXSTARTL = 0x00;
+ 774   1      
+ 775   1      
+ 776   1         // Step 3: Load data into transmit buffer
+ 777   1         // When the random access method is used, we do not need to check for
+ 778   1         // aborted packets. This method will be slightly slower than the Autowrite
+ 779   1         // method, however, it reduces code space requirements.
+ 780   1        
+ 781   1            // Setup RAM Address Pointer To 0x0000    
+ 782   1            RAMADDRH = 0x00;
+ 783   1            RAMADDRL = 0x00;
+ 784   1            ramaddr = 0x0000;
+ 785   1      
+ 786   1            // Step 3d: Load the packet payload
+ 787   1            for(i = 0; i < len; i++){
+ 788   2               RAMTXDATA = outbuf[i];
+ 789   2               INC_RAMADDR
+ 790   2            }
+ 791   1            
+ 792   1            // Step 3e: Pad short packets
+ 793   1            while(ramaddr < 64){
+ 794   2               RAMTXDATA = 0;
+ 795   2               INC_RAMADDR
+ 796   2            }
+ 797   1            
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 14  
+
+ 798   1            // Set the TXENDH:TXENDL address to <ramaddr - 1>
+ 799   1            ramaddr--;
+ 800   1            TXENDH = (ramaddr >> 8);
+ 801   1            TXENDL = (ramaddr & 0x00FF);
+ 802   1      
+ 803   1      
+ 804   1         // Step 4: Set the TXSTARTH:TXSTARTL address back to 0x0000
+ 805   1         TXSTARTH = 0x00;
+ 806   1         TXSTARTL = 0x00;
+ 807   1         
+ 808   1         // Step 5: Write '1' to TXGO to begin transmission
+ 809   1         TXCN = 0x01;
+ 810   1      //   free(outbuf);
+ 811   1       
+ 812   1      }
+ 813          
+ 814          UCHAR xdata * rcve_frame(void)
+ 815          
+ 816          {
+ 817   1         bit rx_ok;
+ 818   1         bit skip = 0;
+ 819   1         UINT1 cplen;   
+ 820   1         unsigned int i;
+ 821   1         UCHAR xdata * buf;
+ 822   1      
+ 823   1         unsigned char interrupt_read;
+ 824   1         unsigned char valid_bits;
+ 825   1         unsigned char num_packets;
+ 826   1      
+ 827   1         // Clear interrupt flags.
+ 828   1         interrupt_read = INT1;
+ 829   1         interrupt_read = INT0;
+ 830   1         
+ 831   1         // Check for packet received interrupt
+ 832   1         if( interrupt_read & RXINT)
+ 833   1         {   
+ 834   2            // Count the number of packets in the receive buffer         
+ 835   2            // This is equal to the number of bits set to 1 in TLBVALID
+ 836   2            valid_bits = TLBVALID;     
+ 837   2                  for(num_packets = 0; valid_bits; num_packets++)      
+ 838   2            {                                 
+ 839   3               valid_bits &= valid_bits - 1; 
+ 840   3            }
+ 841   2         
+ 842   2            // If the receive buffer has 7 packets, then disable reception.
+ 843   2            if( num_packets >= 7) 
+ 844   2            {
+ 845   3               RXCN = RXINH;           // Inhibit New Packet Reception
+ 846   3            }
+ 847   2                }
+ 848   1      
+ 849   1         // Step 1: Check the RXOK bit to see if packet was received correctly
+ 850   1         rx_ok = (CPINFOL & RXOK) && (CPINFOH & RXVALID);
+ 851   1      
+ 852   1         // Step 2: If packet received correctly, read the length, otherwise, skip packet.
+ 853   1         if(rx_ok){
+ 854   2         
+ 855   2            // Read the packet length
+ 856   2            cplen.Char[0] = CPLENH;
+ 857   2            cplen.Char[1] = CPLENL;
+ 858   2                buf=inbuf1;
+ 859   2      //        buf = (UCHAR xdata *)malloc(cplen.Int);
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 15  
+
+ 860   2              
+ 861   2         } else {
+ 862   2           
+ 863   2            // Set packet length to zero
+ 864   2            cplen.Int = 0;
+ 865   2            
+ 866   2            // Skip packet
+ 867   2            skip = 1;      
+ 868   2                buf = NULL;
+ 869   2         }   
+ 870   1      
+ 871   1         // Step 3: Read the entire packet from the buffer 
+ 872   1         
+ 873   1         // If packet will fit in the buffer
+ 874   1         if(1){
+ 875   2            
+ 876   2            // Copy entire packet
+ 877   2            for(i = 0; i < cplen.Int; i++){
+ 878   3               buf[i] = RXAUTORD;
+ 879   3            }
+ 880   2                              rcve_buf_allocated = TRUE;
+ 881   2      
+ 882   2      
+ 883   2         } else {
+ 884   2      
+ 885   2            // Set packet length to zero
+ 886   2            cplen.Int = 0;
+ 887   2            
+ 888   2            // Skip packet
+ 889   2            skip = 1; 
+ 890   2         }
+ 891   1            
+ 892   1         // Step 4: Skip the packet, or clear the valid bit if the entire packet
+ 893   1         // has been unloaded from the buffer.
+ 894   1         
+ 895   1         if(skip)
+ 896   1         {
+ 897   2            RXCN |= 0x02;                    // Skip the packet
+ 898   2         } 
+ 899   1      
+ 900   1         else 
+ 901   1         {
+ 902   2            RXCN |= 0x04;                    // Clear the valid bit only
+ 903   2         }
+ 904   1      
+ 905   1         // If there are no more packets in the receive buffer, enable reception
+ 906   1         if(TLBVALID == 0x00)
+ 907   1         {
+ 908   2            RXCN = 0x00;   
+ 909   2         }
+ 910   1         
+ 911   1         // Return the number of bytes added to the buffer
+ 912   1         return(buf);
+ 913   1      }
+ 914          
+ 915          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1598    ----
+   CONSTANT SIZE    =     24    ----
+   XDATA SIZE       =     32    ----
+C51 COMPILER V8.05a   MAIN                                                                 09/01/2010 15:06:32 PAGE 16  
+
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      9      37
+   IDATA SIZE       =      4    ----
+   BIT SIZE         =   ----       3
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

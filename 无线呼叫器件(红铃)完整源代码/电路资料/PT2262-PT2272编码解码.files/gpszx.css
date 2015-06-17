@@ -1,0 +1,114 @@
+.tdcontent {
+	FONT-SIZE: 12px; COLOR: #000000; LINE-HEIGHT: 23px; FONT-FAMILY: "Verdana", "Arial", "Helvetica", "sans-serif"
+}
+.tdcontent A {
+	COLOR: #000000; TEXT-DECORATION: none
+}
+.tdcontent A:hover {
+	COLOR: #000000; TEXT-DECORATION: underline
+}
+.techlink A {
+	FONT-WEIGHT: bold; COLOR: #ffffff; TEXT-DECORATION: none
+}
+.techlink A:hover {
+	COLOR: #ffffff; TEXT-DECORATION: underline
+}
+.big {
+	FONT-SIZE: 14px; LINE-HEIGHT: 23px
+}
+.big A {
+	COLOR: #0000ff; TEXT-DECORATION: underline
+}
+.big A:hover {
+	COLOR: #ff0000; TEXT-DECORATION: underline
+}
+.big2 {
+	FONT-SIZE: 12px; LINE-HEIGHT: 21px
+}
+.big2 A {
+	FONT-SIZE: 14px; COLOR: #0000ff; TEXT-DECORATION: underline
+}
+.big2 A:hover {
+	FONT-SIZE: 14px; COLOR: #ff0000; TEXT-DECORATION: underline
+}
+TD {
+	FONT-SIZE: 12px
+}
+A {
+	COLOR: #000000; TEXT-DECORATION: none
+}
+A:hover {
+	COLOR: #333333; TEXT-DECORATION: underline
+}
+.allline {
+	BORDER-RIGHT: #dddddd 2px solid; BORDER-TOP: #dddddd 2px solid; BORDER-LEFT: #dddddd 2px solid; BORDER-BOTTOM: #dddddd 2px solid
+}
+.tool {
+	BACKGROUND: #ffffff; COLOR: #333333
+}
+.tool A {
+	COLOR: #333333
+}
+.tool A:hover {
+	COLOR: #999999
+}
+.top A {
+	COLOR: #000000; FONT-FAMILY: "Verdana", "Arial", "Helvetica", "sans-serif"
+}
+.tdbar {
+	VERTICAL-ALIGN: bottom; COLOR: #003399; HEIGHT: 30px; TEXT-ALIGN: center
+}
+.tdbar2 {
+	VERTICAL-ALIGN: bottom; COLOR: #003399; HEIGHT: 20px; TEXT-ALIGN: center
+}
+.trd TD {
+	BACKGROUND-IMAGE: url(../images/button1.gif); HEIGHT: 18px
+}
+.trd TD A {
+	WIDTH: 79px; COLOR: #ffffff; PADDING-TOP: 2px; HEIGHT: 18px
+}
+.trd TD A:hover {
+	COLOR: #000000
+}
+.trd1 {
+	BACKGROUND: #ffffff
+}
+.trd1 TD {
+	BACKGROUND-IMAGE: url(../images/button2.gif); HEIGHT: 25px
+}
+.trd1 TD A {
+	WIDTH: 79px; COLOR: #000000; PADDING-TOP: 5px; HEIGHT: 25px
+}
+.trd1 TD A:hover {
+	COLOR: #888888
+}
+.form1 {
+	FONT-SIZE: 9pt; COLOR: #ffffff; BACKGROUND-COLOR: #006699
+}
+.form2 {
+	BORDER-RIGHT: 1px solid; BORDER-TOP: 1px solid; BORDER-LEFT: 1px solid; BORDER-BOTTOM: 1px solid
+}
+.smallfont {
+	FONT-SIZE: 7pt; COLOR: #aaaaaa; FONT-FAMILY: "Verdana", "Arial", "Helvetica", "sans-serif"
+}
+.blue {
+	BACKGROUND: #f4f4f4
+}
+.blue TD {
+	BACKGROUND: #6699cc; TEXT-ALIGN: center
+}
+.blue TD A {
+	WIDTH: 120px; COLOR: #f4f4f4; PADDING-TOP: 2px; LETTER-SPACING: 3px; HEIGHT: 16px; BACKGROUND-COLOR: transparent
+}
+.blue TD A:hover {
+	COLOR: #000000; BACKGROUND-COLOR: #f4f4f4; TEXT-DECORATION: none
+}
+.blue1 {
+	BACKGROUND: #6699cc; TEXT-ALIGN: center
+}
+.blue1 A {
+	COLOR: #ffffff; TEXT-DECORATION: none
+}
+.blue1 A:hover {
+	COLOR: #ffcc33; TEXT-DECORATION: none
+}

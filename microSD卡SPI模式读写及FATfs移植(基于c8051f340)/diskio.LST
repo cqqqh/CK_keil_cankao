@@ -1,0 +1,185 @@
+C51 COMPILER V9.06   DISKIO                                                                04/20/2012 16:19:00 PAGE 1   
+
+
+C51 COMPILER V9.06, COMPILATION OF MODULE DISKIO
+OBJECT MODULE PLACED IN diskio.OBJ
+COMPILER INVOKED BY: D:\Program Files\Keil\C51\BIN\C51.EXE diskio.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          /*-----------------------------------------------------------------------*/
+   2          /* Low level disk I/O module skeleton for FatFs     (C)ChaN, 2007        */
+   3          /*-----------------------------------------------------------------------*/
+   4          /* This is a stub disk I/O module that acts as front end of the existing */
+   5          /* disk I/O modules and attach it to FatFs module with common interface. */
+   6          /*-----------------------------------------------------------------------*/
+   7          
+   8          /* Modified by xzp21st 2009.5 */
+   9          
+  10          #include "spi.h"
+  11          #include "sd.h"
+  12          #include "diskio.h"
+  13          
+  14          static DSTATUS Stat = STA_NOINIT;       /* Disk status */
+  15          
+  16          /*-----------------------------------------------------------------------*/
+  17          /* Inidialize a Drive                                                    */
+  18          
+  19          DSTATUS disk_initialize (
+  20                  BYTE drv                                /* Physical drive nmuber (0) */
+  21          )
+  22          {
+  23   1              if (drv) return STA_NOINIT;     /* Supports only single drive */
+  24   1                      
+  25   1              if (!SD_init()) /* Initialization succeded */
+  26   1              {                       
+  27   2                      Stat &= ~STA_NOINIT; /* Clear STA_NOINIT */
+  28   2              } 
+  29   1      
+  30   1              return Stat;
+  31   1      }
+  32          
+  33          /*-----------------------------------------------------------------------*/
+  34          /* Return Disk Status                                                    */
+  35          
+  36          DSTATUS disk_status (
+  37                  BYTE drv                /* Physical drive nmuber (0) */
+  38          )
+  39          {
+  40   1              if (drv) return STA_NOINIT;             /* Supports only single drive */
+  41   1              return Stat;
+  42   1      }
+  43          
+  44          /*-----------------------------------------------------------------------*/
+  45          /* Read Sector(s)                                                        */
+  46          
+  47          DRESULT disk_read (
+  48                  BYTE drv,               /* Physical drive nmuber:(0) */
+  49                  BYTE *buff,             /* Data buffer to store read data */
+  50                  DWORD sector,   /* Sector address (LBA) */
+  51                  BYTE count              /* Number of sectors to read (1..255) */
+  52          )
+  53          {
+  54   1              if (drv || !count) return RES_PARERR;
+  55   1              if (Stat & STA_NOINIT) return RES_NOTRDY;
+C51 COMPILER V9.06   DISKIO                                                                04/20/2012 16:19:00 PAGE 2   
+
+  56   1      
+  57   1              if (count == 1)/* Single block read */
+  58   1              {       
+  59   2                      if(!SD_readSingleBlock(buff, sector)) count = 0;
+  60   2                      
+  61   2              }
+  62   1              else/* Multiple block read */
+  63   1              {                                                       
+  64   2                      if(!SD_readMultipleBlock (buff, sector, count)) count = 0;
+  65   2              }
+  66   1      
+  67   1              return count ? RES_ERROR : RES_OK;
+  68   1      }
+  69          
+  70          /*-----------------------------------------------------------------------*/
+  71          /* Write Sector(s)                                                       */
+  72          
+  73          #if _READONLY == 0
+  74          DRESULT disk_write (
+  75                  BYTE drv,                       /* Physical drive nmuber (0..) */
+  76                  const BYTE *buff,       /* Data to be written */
+  77                  DWORD sector,           /* Sector address (LBA) */
+  78                  UINT count                      /* Number of sectors to write  */
+  79          )
+  80          {
+  81   1              if (drv || !count) return RES_PARERR;
+  82   1              if (Stat & STA_NOINIT) return RES_NOTRDY;
+  83   1      
+  84   1              if (count == 1)/* Single block write */
+  85   1              {       
+  86   2                      if(!SD_writeSingleBlock(buff, sector)) count = 0;
+  87   2                      
+  88   2              }
+  89   1              else/* Multiple block write */
+  90   1              {                                                       
+  91   2                      if(!SD_writeMultipleBlock (buff, sector, count)) count = 0;
+  92   2              }
+  93   1      
+  94   1              return count ? RES_ERROR : RES_OK;
+  95   1      }
+  96          #endif /* _READONLY */
+  97          
+  98          /*-----------------------------------------------------------------------*/
+  99          /* Miscellaneous Functions                                               */
+ 100          
+ 101          DRESULT disk_ioctl (
+ 102                  BYTE drv,               /* Physical drive nmuber (0..) */
+ 103                  BYTE ctrl,              /* Control code */
+ 104                  void *buff              /* Buffer to send/receive control data */
+ 105          )
+ 106          {
+ 107   1              DRESULT res;
+ 108   1              BYTE n, csd[16];
+ 109   1              DWORD csize;
+ 110   1      
+ 111   1              if (drv) return RES_PARERR;
+ 112   1              if (Stat & STA_NOINIT) return RES_NOTRDY;
+ 113   1      
+ 114   1              res = RES_ERROR;
+ 115   1      
+ 116   1              switch (ctrl) {
+ 117   2                      case CTRL_SYNC :        /* Flush dirty buffer if present */
+C51 COMPILER V9.06   DISKIO                                                                04/20/2012 16:19:00 PAGE 3   
+
+ 118   2                              return RES_OK;
+ 119   2                              break;
+ 120   2      
+ 121   2                      case GET_SECTOR_COUNT : /* Get number of sectors on the disk (WORD) */
+ 122   2                              if((SD_sendCommand(CMD9, 0) == 0) && receive_DataBlock(csd, 16)) 
+ 123   2                              {
+ 124   3                                      if((csd[0] >> 6) == 1) /* SDC ver 2.00 */
+ 125   3                                      {       
+ 126   4                                              csize = csd[9] + ((WORD)csd[8] << 8) + 1;
+ 127   4                                              *(DWORD*)buff = (DWORD)csize << 10;
+ 128   4                                      } 
+ 129   3                                      else /* MMC or SDC ver 1.XX */
+ 130   3                                      {                               
+ 131   4                                              n = (csd[5] & 15) + ((csd[10] & 128) >> 7) + ((csd[9] & 3) << 1) + 2;
+ 132   4                                              csize = (csd[8] >> 6) + ((WORD)csd[7] << 2) + ((WORD)(csd[6] & 3) << 10) + 1;
+ 133   4                                              *(DWORD*)buff = (DWORD)csize << (n - 9);
+ 134   4                                      }
+ 135   3                                      res = RES_OK;
+ 136   3                              }
+ 137   2                              break;
+ 138   2      
+ 139   2                      case GET_SECTOR_SIZE :  /* Get sectors on the disk (WORD) */
+ 140   2                              *(WORD*)buff = 512;
+ 141   2                              res = RES_OK;
+ 142   2                              break;
+ 143   2      
+ 144   2                      case GET_BLOCK_SIZE :   /* Get erase block size in unit of sectors (DWORD) */
+ 145   2                              if ((SD_sendCommand(CMD9, 0) == 0) && receive_DataBlock(csd, 16)) /* Read CSD */
+ 146   2                              {       
+ 147   3                                      *(DWORD*)buff = (((csd[10] & 63) << 1) + ((WORD)(csd[11] & 128) >> 7) + 1) << ((csd[13] >> 6) - 1);
+ 148   3                                      res = RES_OK;
+ 149   3                              }
+ 150   2                              break;
+ 151   2      
+ 152   2                      default:
+ 153   2                              res = RES_PARERR;
+ 154   2              }
+ 155   1      
+ 156   1              return res;
+ 157   1      }
+ 158          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    762    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      1      43
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

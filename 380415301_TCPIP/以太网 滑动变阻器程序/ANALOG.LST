@@ -1,0 +1,160 @@
+C51 COMPILER V8.05a   ANALOG                                                               09/01/2010 15:06:31 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE ANALOG
+OBJECT MODULE PLACED IN ANALOG.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE ANALOG.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net ANALOG.C
+   6          //
+   7          // This module handles the analog inputs which are external temperature
+   8          // sensor, the on-chip temperature sensor, and operating voltage.
+   9          //-----------------------------------------------------------------------------
+  10          #include <string.h>
+  11          //#include <stdlib.h>
+  12          #include "C8051f340.h"
+  13          #include "net.h"
+  14          #include "analog.h"
+  15          
+  16          extern char xdata text[];
+  17          char a[10];
+  18          UINT idata cpu_temperature=3700,cpu_voltage;
+  19          UCHAR idata mux_select;
+  20          UINT idata temp,ams,temp_l;
+  21          sfr16 ADC0     = 0xbe;                 // ADC0 data
+  22          
+  23          
+  24          void int2str(int x, char* str);                  //在主程序中有定义     整形到字符串转换
+  25          void SendString(char *pSendString);             //字符串发送
+  26          
+  27          
+  28          
+  29          //--------------------------------------------------------------------------
+  30          // Initialize the A/D converter
+  31          // 
+  32          //--------------------------------------------------------------------------
+  33          void init_adc(void)
+  34          {
+  35   1              REF0CN    = 0x0F;                                  //VDD为电压基准 ，内部温度传感器工作，内部偏压发生器工作，内部基准缓冲期被驱动到
+             -VREF引脚。
+  36   1                                                                                      //REF0CN=0x00时VREF作为电压基准
+  37   1              mux_select = MUX_CPU_TEMP;                      // CPU on-chip temp sensor       片上温度传感器
+  38   1          AMX0P      = MUX_CPU_TEMP;                  //ADC0正输入 vref作为输入  AMX0P=0x13为配置P1.1为输入端
+  39   1          AMX0N     = 0x1F;                                   //GND单端方式 （正反输入均需配置）
+  40   1          ADC0CF    = 0xF8;                   //ADC0配置寄存器数据右对齐
+  41   1          ADC0CN    = 0x80;                                   //ADC0使能
+  42   1      }
+  43          
+  44           /*********************************************************************/
+  45          // ADC中断程序  需要是可以打开  此程序暂时不需要进行中断读取
+  46          /*********************************************************************/
+  47          /*void ADC0_ConvComplete_ISR(void) interrupt 10
+  48          {
+  49                temp= ADC0H;                                                //高字节
+  50                ams=ADC0L;                                                  //低字节
+  51                    temp_l=temp<<8+ams;
+  52                    temp_l=temp_l>>4;
+  53                AD0INT = 0;                                                 //清中断
+  54          }*/
+C51 COMPILER V8.05a   ANALOG                                                               09/01/2010 15:06:31 PAGE 2   
+
+  55          
+  56          //--------------------------------------------------------------------------
+  57          // This function is a little state machine which reads one analog
+  58          // inputs at a time, out of the 3 possible inputs
+  59          //  1. On-chip temperature
+  60          //  2. External air temperature
+  61          //  3. CPU operating voltage
+  62          //--------------------------------------------------------------------------
+  63          void read_analog_inputs(void)    //对输入的读取分析工作 反复读取片内温度 和 P2.5脚的输入情况
+  64          {                                                                 //主要输出cpu_temperature和cpu_voltage到主程序         同时进行字符串的转换及发送
+  65   1      //      ULONG idata temp_long;
+  66   1      
+  67   1          AD0INT = 0;                      // 清转换结束标志位
+  68   1          AD0BUSY = 1;                     // 开始转换
+  69   1              while (AD0INT == 0);             // 等待转换结束
+  70   1      
+  71   1              switch (mux_select)
+  72   1              {
+  73   2                      case MUX_CPU_TEMP:
+  74   2                      temp= ADC0H;                                    //高字节
+  75   2                          ams=ADC0L;                                            //低字节
+  76   2                              temp=temp<<8;
+  77   2                              temp_l=temp+ams;
+  78   2      
+  79   2                              temp_l=temp_l*3.125;
+  80   2              //              temp_l=(temp_l-603)/2.5;
+  81   2                              temp_l=temp_l/0.24;
+  82   2      
+  83   2                              int2str(temp_l, a);
+  84   2                              SendString("T:");
+  85   2                              SendString(a);
+  86   2      
+  87   2                              cpu_temperature=temp_l;
+  88   2                              AMX0P = MUX_CPU_VOLTS;          // Select AIN1 for next read  选择AIN1作为下一个要读取的数据输入
+  89   2                              REF0CN    = 0x0F; 
+  90   2                              mux_select = MUX_CPU_VOLTS;
+  91   2                      break;
+  92   2      
+  93   2                      case MUX_CPU_VOLTS:
+  94   2                              temp= ADC0H;                                       //高字节
+  95   2                          ams=ADC0L;                                            //低字节
+  96   2                              temp=temp<<8;
+  97   2                              temp_l=temp+ams;
+  98   2                              //temp_l=temp_l*3.125;
+  99   2                              temp_l=temp_l*10;
+ 100   2      
+ 101   2                              int2str(temp_l, a);
+ 102   2                              SendString("V:");
+ 103   2                              SendString(a);
+ 104   2      
+ 105   2                              cpu_voltage = temp_l;
+ 106   2                              AMX0P = MUX_CPU_TEMP;           // Select on-chip temp sensor
+ 107   2                              REF0CN    = 0x07; 
+ 108   2                              mux_select = MUX_CPU_TEMP;
+ 109   2                      break;
+ 110   2      
+ 111   2                      default:
+ 112   2                              AMX0P = MUX_CPU_TEMP;
+ 113   2                              mux_select = MUX_CPU_TEMP;
+ 114   2                      break;
+ 115   2              }
+ 116   1              /*
+C51 COMPILER V8.05a   ANALOG                                                               09/01/2010 15:06:31 PAGE 3   
+
+ 117   1           temp= ADC0H;                                                 //高字节
+ 118   1           ams=ADC0L;                                           //低字节
+ 119   1               temp=temp<<8;
+ 120   1               temp_l=temp+ams;
+ 121   1               temp_l=temp_l>>4;
+ 122   1         cpu_voltage = temp_l;
+ 123   1         int2str(cpu_voltage, a);
+ 124   1         SendString(a);*/
+ 125   1      }
+ 126           
+ 127          
+ 128           
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    245    ----
+   CONSTANT SIZE    =      6    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     10    ----
+   IDATA SIZE       =     11    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

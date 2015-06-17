@@ -1,0 +1,673 @@
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE TCP
+OBJECT MODULE PLACED IN TCP.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE TCP.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net TCP.C
+   6          //
+   7          // This module handles TCP segments
+   8          // Refer to RFC 793, 896, 1122, 1323, 2018, 2581
+   9          //
+  10          // A "connection" is a unique combination of 4 items:  His IP address,
+  11          // his port number, my IP address, and my port number.
+  12          //
+  13          // Note that a SYN and a FIN count as a byte of data, but a RST does
+  14          // not count. Neither do any of the other flags.
+  15          // See "TCP/IP Illustrated, Volume 1" Sect 17.3 for info on flags
+  16          //-----------------------------------------------------------------------------
+  17          #include <string.h>
+  18          //#include <stdlib.h>
+  19          #include <ctype.h>              // toupper
+  20          #include "C8051f340.h"
+  21          #include "net.h"
+  22          #include "cksum.h"
+  23          #include "ip.h"
+  24          #include "http.h"
+  25          #include "tcp.h"
+  26          extern char xdata outbuf1[];
+  27          
+  28          // These structures keep track of connection information
+  29          CONNECTION xdata conxn[5];
+  30          
+  31          ULONG idata initial_sequence_nr;
+  32          UINT xdata sender_tcpport;
+  33          static ULONG xdata sender_ipaddr;
+  34          UCHAR idata just_closed; // Keeps track of when a conxn closed
+  35          
+  36          extern ULONG code my_ipaddr;
+  37          extern UCHAR idata debug;
+  38          extern char xdata text[];
+  39          
+  40          // Options: MSS (4 bytes), NOPS (2 bytes), Selective ACK (2 bytes) 
+  41          UCHAR code opt[10] = {
+  42          0x02, 0x04, 0x05, 0xB4,
+  43          0x01, 0x01,
+  44          0x04, 0x02};
+  45          
+  46          
+  47          
+  48          //------------------------------------------------------------------------
+  49          //  Initialize variables declared in this module
+  50          //
+  51          //------------------------------------------------------------------------
+  52          void init_tcp(void)
+  53          {
+  54   1         memset(conxn, 0, sizeof(conxn));
+  55   1         just_closed = FALSE;
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 2   
+
+  56   1         initial_sequence_nr = 1;
+  57   1      }
+  58          
+  59          
+  60          
+  61          //------------------------------------------------------------------------
+  62          // This sends a TCP segments that do not include any data.
+  63          // http_send() in the HTTP module is used to send data.
+  64          // See "TCP/IP Illustrated, Volume 1" Sect 17.3
+  65          //------------------------------------------------------------------------
+  66          void tcp_send(UINT flags, UINT hdr_len, UCHAR nr)
+  67          {
+  68   1         ULONG idata sum, dest;
+  69   1              UINT idata result;
+  70   1         UCHAR xdata * outbuf;
+  71   1         TCP_HEADER xdata * tcp;
+  72   1         IP_HEADER xdata * ip;
+  73   1                
+  74   1         
+  75   1         // Allocate memory for entire outgoing message including
+  76   1         // eth & IP headers 
+  77   1        // outbuf = (UCHAR xdata *)malloc(34 + hdr_len);
+  78   1        // if (outbuf == NULL)
+  79   1         //{
+  80   1          //  return;
+  81   1         //}
+  82   1         outbuf = outbuf1;
+  83   1                 
+  84   1         tcp = (TCP_HEADER xdata *)(outbuf + 34);
+  85   1         ip = (IP_HEADER xdata *)(outbuf + 14);
+  86   1      
+  87   1         // If no connection, then message is probably a reset
+  88   1         // message which goes back to the sender
+  89   1         // Otherwise, use information from the connection.
+  90   1         if (nr == NO_CONNECTION)
+  91   1         {
+  92   2            tcp->source_port = HTTP_PORT;
+  93   2            tcp->dest_port = sender_tcpport;
+  94   2            tcp->sequence = 0;
+  95   2            tcp->ack_number = 0;
+  96   2            dest = sender_ipaddr;
+  97   2         }
+  98   1         else if (nr < 5)
+  99   1         {
+ 100   2            // This message is to connected port
+ 101   2            tcp->source_port = HTTP_PORT;
+ 102   2            tcp->dest_port = conxn[nr].port;
+ 103   2            tcp->sequence = conxn[nr].my_sequence;
+ 104   2            tcp->ack_number = conxn[nr].his_sequence;
+ 105   2            dest = conxn[nr].ipaddr;
+ 106   2         }
+ 107   1         else
+ 108   1         {
+ 109   2      //              free(outbuf);
+ 110   2                      return;
+ 111   2              }
+ 112   1      
+ 113   1         // Total segment length = header length
+ 114   1            
+ 115   1         // Insert header len
+ 116   1         tcp->flags = (hdr_len << 10) | flags;
+ 117   1         tcp->window = 1024;
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 3   
+
+ 118   1         tcp->checksum = 0;
+ 119   1         tcp->urgent_ptr = 0;
+ 120   1         
+ 121   1         // Sending SYN with header options
+ 122   1         if (hdr_len == 28)
+ 123   1         {
+ 124   2            memcpy(&tcp->options, opt, 8);
+ 125   2         }   
+ 126   1         
+ 127   1         // Compute checksum including 12 bytes of pseudoheader
+ 128   1              // Must pre-fill 2 items in ip header to do this
+ 129   1              ip->dest_ipaddr = dest;
+ 130   1              ip->source_ipaddr = my_ipaddr;
+ 131   1                      
+ 132   1              // Sum source_ipaddr, dest_ipaddr, and entire TCP message 
+ 133   1              sum = (ULONG)cksum(outbuf + 26, 8 + hdr_len);
+ 134   1                                      
+ 135   1              // Add in the rest of pseudoheader which is
+ 136   1              // protocol id and TCP segment length
+ 137   1              sum += (ULONG)0x0006;
+ 138   1              sum += (ULONG)hdr_len;
+ 139   1      
+ 140   1              // In case there was a carry, add it back around
+ 141   1              result = (UINT)(sum + (sum >> 16));
+ 142   1              tcp->checksum = ~result;
+ 143   1         
+ 144   1              ip_send(outbuf, dest, TCP_TYPE, hdr_len);
+ 145   1      
+ 146   1         // (Re)start TCP retransmit timer
+ 147   1         conxn[nr].timer = TCP_TIMEOUT;
+ 148   1      }
+ 149          
+ 150          
+ 151          
+ 152          
+ 153          //------------------------------------------------------------------------
+ 154          // This runs every 0.5 seconds.  If the other end has not ACK'd
+ 155          // everyting we have sent, it re-sends it.  To save RAM space, we 
+ 156          // regenerate a segment rather than keeping a bunch of segments 
+ 157          // hanging around eating up RAM.  A connection should not be in an
+ 158          // opening or closing state when this timer expires, so we simply
+ 159          // send a reset.
+ 160          //
+ 161          //      If a connection is in the ESTABLISHED state when the timer expires
+ 162          // then we have just sent a web page so re-send the page
+ 163          //------------------------------------------------------------------------
+ 164          void tcp_retransmit(void)
+ 165          {
+ 166   1         static UCHAR idata retries = 0;
+ 167   1         UCHAR idata nr;
+ 168   1      
+ 169   1         // Scan through all active connections 
+ 170   1         for (nr = 0; nr < 5; nr++)
+ 171   1         {
+ 172   2            if ((conxn[nr].ipaddr != 0) && (conxn[nr].timer))
+ 173   2            {
+ 174   3               // Decrement the timer and see if it hit 0
+ 175   3               conxn[nr].timer--;
+ 176   3               if (conxn[nr].timer == 0)
+ 177   3               {
+ 178   4                  // Socket just timed out. If we are not in ESTABLISHED state
+ 179   4                  // something is amiss so send reset and close connection
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 4   
+
+ 180   4                  if (conxn[nr].state != STATE_ESTABLISHED)
+ 181   4                  {
+ 182   5                     // Send reset and close connection
+ 183   5                     tcp_send(FLG_RST, 20, nr);
+ 184   5                     conxn[nr].ipaddr = 0;
+ 185   5                     return;
+ 186   5                  }
+ 187   4                  else
+ 188   4                  {
+ 189   5                     // Socket is in ESTABLISHED state. First make sure his
+ 190   5                     // ack number is not bogus.
+ 191   5                     if (conxn[nr].his_ack > conxn[nr].my_sequence)
+ 192   5                     {
+ 193   6                        // Send reset and close connection
+ 194   6                        tcp_send(FLG_RST, 20, nr);
+ 195   6                        conxn[nr].ipaddr = 0;
+ 196   6                        return;
+ 197   6                     }
+ 198   5                     
+ 199   5                     // We always increment our sequence number immediately
+ 200   5                                              // after sending, so the ack number from the other end
+ 201   5                                              // should be equal to our sequence number.  If it is less,
+ 202   5                                              // it means he lost some of our data.
+ 203   5                     if (conxn[nr].his_ack < conxn[nr].my_sequence)
+ 204   5                                              {
+ 205   6                        retries++;
+ 206   6                                                      if (retries <= 2)
+ 207   6                                                      {
+ 208   7                              // The only thing we send is a web page, and it looks
+ 209   7                              // like other end did not get it, so resend
+ 210   7                              // but do not increase my sequence number
+ 211   7                              http_server(conxn[nr].query, 0, nr, 1);
+ 212   7                                          conxn[nr].inactivity = INACTIVITY_TIME;
+ 213   7                        }
+ 214   6                                                      else
+ 215   6                                                      {
+ 216   7                                                              // Send reset and close connection
+ 217   7                              tcp_send(FLG_RST, 20, nr);
+ 218   7                              conxn[nr].ipaddr = 0;
+ 219   7                      }
+ 220   6                     }
+ 221   5                  }
+ 222   4               }
+ 223   3            }
+ 224   2         }
+ 225   1      }
+ 226          
+ 227          
+ 228          
+ 229          
+ 230          //------------------------------------------------------------------------
+ 231          // This runs every 0.5 seconds.  If the connection has had no activity
+ 232          // it initiates closing the connection.
+ 233          //
+ 234          //------------------------------------------------------------------------
+ 235          void tcp_inactivity(void)
+ 236          {
+ 237   1         UCHAR idata nr;
+ 238   1         
+ 239   1         // Look for active connections in the established state
+ 240   1         for (nr = 0; nr < 5; nr++)
+ 241   1         {
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 5   
+
+ 242   2            if ((conxn[nr].ipaddr != 0) && 
+ 243   2                (conxn[nr].state == STATE_ESTABLISHED) &&
+ 244   2                (conxn[nr].inactivity))
+ 245   2            {
+ 246   3               // Decrement the timer and see if it hit 0
+ 247   3               conxn[nr].inactivity--;
+ 248   3               if (conxn[nr].inactivity == 0)
+ 249   3               {
+ 250   4                  // Inactivity timer has just timed out.
+ 251   4                  // Initiate close of connection
+ 252   4                  tcp_send((FLG_ACK | FLG_FIN), 20, nr);
+ 253   4                  conxn[nr].my_sequence++;    // For my FIN
+ 254   4                  conxn[nr].state = STATE_FIN_WAIT_1;
+ 255   4               }
+ 256   3            }
+ 257   2         }
+ 258   1      }
+ 259          
+ 260          
+ 261          
+ 262          //------------------------------------------------------------------------
+ 263          // This handles incoming TCP messages and manages the TCP state machine
+ 264          // Note - both the SYN and FIN flags consume a sequence number.
+ 265          // See "TCP/IP Illustrated, Volume 1" Sect 18.6 for info on TCP states
+ 266          // See "TCP/IP Illustrated, Volume 1" Sect 17.3 for info on flags
+ 267          //------------------------------------------------------------------------
+ 268          void tcp_rcve(UCHAR xdata * inbuf, UINT len)
+ 269          {
+ 270   1         UCHAR idata i, j, nr;
+ 271   1         UINT idata result, header_len, data_len;
+ 272   1         TCP_HEADER xdata * tcp;
+ 273   1         IP_HEADER xdata * ip;
+ 274   1         ULONG idata sum;
+ 275   1         
+ 276   1         // IP header is always 20 bytes so message starts at index 34      
+ 277   1         tcp = (TCP_HEADER xdata *)(inbuf + 34);
+ 278   1         ip = (IP_HEADER xdata *)(inbuf + 14);
+ 279   1                                         
+ 280   1              // Compute TCP checksum including 12 byte pseudoheader
+ 281   1              // Sum source_ipaddr, dest_ipaddr, and entire TCP message 
+ 282   1              sum = (ULONG)cksum(inbuf + 26, 8 + len);
+ 283   1                      
+ 284   1              // Add in the rest of pseudoheader which is
+ 285   1              // protocol id and TCP segment length
+ 286   1              sum += (ULONG)0x0006;     
+ 287   1              sum += (ULONG)len;
+ 288   1      
+ 289   1              // In case there was a carry, add it back around
+ 290   1              result = (UINT)(sum + (sum >> 16));
+ 291   1                      
+ 292   1              if (result != 0xFFFF)
+ 293   1              {
+ 294   2                      return;
+ 295   2         }
+ 296   1      
+ 297   1         
+ 298   1              // See if message is for http server
+ 299   1              if (tcp->dest_port != HTTP_PORT)        
+ 300   1         {
+ 301   2            
+ 302   2            tcp_send(FLG_RST, 20, NO_CONNECTION);
+ 303   2            return;
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 6   
+
+ 304   2         }
+ 305   1         
+ 306   1         // Capture sender's IP address and port number
+ 307   1         sender_ipaddr = ip->source_ipaddr;
+ 308   1         sender_tcpport = tcp->source_port;
+ 309   1         
+ 310   1         // See if the TCP segment is from someone we are already
+ 311   1         // connected to. 
+ 312   1         for (i=0; i < 5; i++)
+ 313   1         {
+ 314   2            if ((ip->source_ipaddr == conxn[i].ipaddr) &&
+ 315   2               (tcp->source_port == conxn[i].port))
+ 316   2            {   
+ 317   3               nr = i;
+ 318   3               break;
+ 319   3            }       
+ 320   2         }
+ 321   1         
+ 322   1         // If i = 5, we are not connected. If it is a SYN then assign
+ 323   1         // a temporary conection  to it for processing
+ 324   1         if (i == 5)
+ 325   1         {
+ 326   2            if (tcp->flags & FLG_SYN)
+ 327   2            {
+ 328   3               // Find first unused connection (one with IP = 0) 
+ 329   3               for (j=0; j < 5; j++)
+ 330   3               {
+ 331   4                  if (conxn[j].ipaddr == 0)
+ 332   4                  {
+ 333   5                     nr = j;
+ 334   5                     // Initialize new connection
+ 335   5                     conxn[nr].state = STATE_LISTEN;
+ 336   5                     break;
+ 337   5                  }
+ 338   4               }
+ 339   3            
+ 340   3               // If all connections are used then drop msg
+ 341   3               if (j == 5) return;
+ 342   3               
+ 343   3              
+ 344   3            }
+ 345   2         }
+ 346   1      
+ 347   1      
+ 348   1         // By now we should have a connection number in range of 0-4
+ 349   1         // Do a check to avoid any chance of exceeding size of struct
+ 350   1         if (nr > 4)
+ 351   1         {
+ 352   2            return;
+ 353   2         }
+ 354   1      
+ 355   1         // Eventually put in protection against wrapping sequence
+ 356   1         // numbers, for now make the client start over if his
+ 357   1         // sequence number is close to wrapping
+ 358   1         if (tcp->sequence > 0xFFFFFF00L) 
+ 359   1         {
+ 360   2                      conxn[nr].ipaddr = 0;                   
+ 361   2                      tcp_send(FLG_RST, 20, NO_CONNECTION);
+ 362   2                      return;         
+ 363   2         }
+ 364   1                 
+ 365   1         // Handle messages whose action is mostly independent of state
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 7   
+
+ 366   1         // such as RST, SYN, and segment with no ACK.  That way the
+ 367   1              // state machine below does not need to worry about it.
+ 368   1         if (tcp->flags & FLG_RST)
+ 369   1         {
+ 370   2            // An RST does not depend on state at all.  And it does
+ 371   2            // not count as data so do not send an ACK here.  Close
+ 372   2            // connection
+ 373   2            conxn[nr].ipaddr = 0;
+ 374   2            return;
+ 375   2         }
+ 376   1              
+ 377   1              else if (tcp->flags & FLG_SYN)
+ 378   1              {
+ 379   2                 // A SYN segment only makes sense if connection is in LISTEN 
+ 380   2                 if ((conxn[nr].state != STATE_LISTEN) &&
+ 381   2                (conxn[nr].state != STATE_CLOSED))
+ 382   2                      {
+ 383   3                              conxn[nr].ipaddr = 0;                   
+ 384   3                              tcp_send(FLG_RST, 20, NO_CONNECTION);
+ 385   3                              return;         
+ 386   3                      }
+ 387   2              }
+ 388   1              
+ 389   1              else if ((tcp->flags & FLG_ACK) == 0)
+ 390   1              {
+ 391   2                      // Incoming segments except SYN or RST must have ACK bit set
+ 392   2                      // See TCP/IP Illustrated, Vol 2, Page 965
+ 393   2            // Drop segment but do not send a reset
+ 394   2                      return;
+ 395   2              }
+ 396   1                 
+ 397   1         // Compute length of header including options, and from that
+ 398   1         // compute length of actual data
+ 399   1         header_len =  (tcp->flags & 0xF000) >> 10;
+ 400   1         data_len = len - header_len;
+ 401   1      
+ 402   1      
+ 403   1               
+ 404   1         // Handle TCP state machine for this connection
+ 405   1         switch (conxn[nr].state)
+ 406   1         {
+ 407   2            case STATE_CLOSED:
+ 408   2            case STATE_LISTEN:
+ 409   2                  
+ 410   2            // If incoming segment contains SYN and no ACK, then handle 
+ 411   2            if ((tcp->flags & FLG_SYN) && ((tcp->flags & FLG_ACK) == 0))
+ 412   2            {
+ 413   3               // Capture his starting sequence number and generate
+ 414   3               // my starting sequence number
+ 415   3               // Fill in connection information
+ 416   3               conxn[nr].ipaddr = ip->source_ipaddr;
+ 417   3               conxn[nr].port = tcp->source_port;
+ 418   3               conxn[nr].state = STATE_LISTEN;
+ 419   3               conxn[nr].his_sequence = 1 + tcp->sequence;
+ 420   3               conxn[nr].his_ack = tcp->ack_number;
+ 421   3               
+ 422   3               // Use system clock for initial sequence number
+ 423   3               conxn[nr].my_sequence = initial_sequence_nr;
+ 424   3               initial_sequence_nr += 64000L;
+ 425   3               EA = 1;                  
+ 426   3                        
+ 427   3               // Send header options with the next message
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 8   
+
+ 428   3               // Since timestamps are optional and we do not use
+ 429   3               // them, do not have to send them 
+ 430   3               // After sending the SYN ACK the client browser will
+ 431   3               // blast me with 2 messages, an ACK, and a HTTP GET
+ 432   3               tcp_send(FLG_SYN | FLG_ACK, 28, nr);
+ 433   3               
+ 434   3               // My SYN flag increments my sequence number
+ 435   3               // My sequence number is always updated to point to 
+ 436   3               // the next byte to be sent.  So the incoming ack
+ 437   3               // number should equal my sequence number  
+ 438   3               conxn[nr].my_sequence++;
+ 439   3            
+ 440   3               conxn[nr].state = STATE_SYN_RCVD;
+ 441   3            }
+ 442   2                      else 
+ 443   2            {
+ 444   3               // Sender is out of sync so send reset
+ 445   3               conxn[nr].ipaddr = 0;
+ 446   3               tcp_send(FLG_RST, 20, NO_CONNECTION);   
+ 447   3            } 
+ 448   2                      break;
+ 449   2      
+ 450   2      
+ 451   2            case STATE_SYN_RCVD:
+ 452   2            // He may already be sending me data - should process it
+ 453   2                      conxn[nr].his_sequence += data_len;
+ 454   2            conxn[nr].his_ack = tcp->ack_number;
+ 455   2                  
+ 456   2            if (tcp->flags & FLG_FIN)
+ 457   2                      {
+ 458   3                         // His FIN counts as a byte of data
+ 459   3               conxn[nr].his_sequence++;
+ 460   3               tcp_send(FLG_ACK, 20, nr);
+ 461   3               conxn[nr].state = STATE_CLOSE_WAIT;
+ 462   3                     
+ 463   3                      // At this point we would normally wait for the application
+ 464   3               // to close.  For now, send FIN right away.
+ 465   3               tcp_send(FLG_FIN | FLG_ACK, 20, nr);
+ 466   3               conxn[nr].my_sequence++;   // For my FIN
+ 467   3               conxn[nr].state = STATE_LAST_ACK;
+ 468   3            }
+ 469   2      
+ 470   2                      // Make sure he is ACKing my SYN
+ 471   2                      else if (tcp->ack_number == conxn[nr].my_sequence)
+ 472   2            {
+ 473   3               conxn[nr].state = STATE_ESTABLISHED;
+ 474   3               // If sender sent data ignore it and he will resend
+ 475   3               // Do not send response because we received no
+ 476   3               // data... wait for client to send something to me 
+ 477   3            }
+ 478   2            break;
+ 479   2      
+ 480   2      
+ 481   2            case STATE_ESTABLISHED:
+ 482   2            conxn[nr].his_ack = tcp->ack_number;
+ 483   2                 
+ 484   2            if (tcp->flags & FLG_FIN)
+ 485   2                      {
+ 486   3                         // His FIN counts as a byte of data
+ 487   3               conxn[nr].his_sequence++;
+ 488   3               tcp_send(FLG_ACK, 20, nr);
+ 489   3               conxn[nr].state = STATE_CLOSE_WAIT;
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 9   
+
+ 490   3                     
+ 491   3                      // At this point we would normally wait for the application
+ 492   3               // to close.  For now, send FIN immediately.
+ 493   3               tcp_send(FLG_FIN | FLG_ACK, 20, nr);
+ 494   3               conxn[nr].my_sequence++;   // For my FIN
+ 495   3               conxn[nr].state = STATE_LAST_ACK;
+ 496   3            }
+ 497   2                      else if (data_len != 0)
+ 498   2            {
+ 499   3                              // Received normal TCP segment from sender with data
+ 500   3              // Send an ACK immediately and pass the data on to
+ 501   3                              // the application
+ 502   3                              conxn[nr].his_sequence += data_len;
+ 503   3               tcp_send(FLG_ACK, 20, nr);             // Send ACK
+ 504   3                
+ 505   3                                                                                                      
+ 506   3                              // Send pointer to start of TCP payload
+ 507   3                              // http_server increments my sequence number when 
+ 508   3               // sending so don't worry about it here
+ 509   3               result = http_server(inbuf, header_len, nr, 0);
+ 510   3                                                                      
+ 511   3                              // Start timer to close conxn if no activity
+ 512   3                              conxn[nr].inactivity = INACTIVITY_TIME;
+ 513   3                      }
+ 514   2                 break;
+ 515   2      
+ 516   2      
+ 517   2            case STATE_CLOSE_WAIT:
+ 518   2            // With this code, should not get here
+ 519   2            ;
+ 520   2            break;
+ 521   2      
+ 522   2            
+ 523   2            case STATE_LAST_ACK:
+ 524   2            conxn[nr].his_ack = tcp->ack_number;
+ 525   2                  
+ 526   2            // If he ACK's my FIN then close
+ 527   2            if (tcp->ack_number == conxn[nr].my_sequence)
+ 528   2            {
+ 529   3               conxn[nr].state = STATE_CLOSED;
+ 530   3               conxn[nr].ipaddr = 0;  // Free up struct area
+ 531   3               just_closed = TRUE;
+ 532   3            }
+ 533   2            break;
+ 534   2      
+ 535   2            
+ 536   2            case STATE_FIN_WAIT_1:
+ 537   2            // He may still be sending me data - should process it
+ 538   2                      conxn[nr].his_sequence += data_len;
+ 539   2            conxn[nr].his_ack = tcp->ack_number;
+ 540   2                        
+ 541   2            if (tcp->flags & FLG_FIN)
+ 542   2            {
+ 543   3               // His FIN counts as a byte of data
+ 544   3               conxn[nr].his_sequence++;
+ 545   3               tcp_send(FLG_ACK, 20, nr);
+ 546   3               
+ 547   3               // If he has ACK'd my FIN then we can close connection
+ 548   3               if (tcp->ack_number == conxn[nr].my_sequence)
+ 549   3                              {
+ 550   4                      conxn[nr].state = STATE_TIME_WAIT;
+ 551   4                     
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 10  
+
+ 552   4                      conxn[nr].state = STATE_CLOSED;
+ 553   4                      conxn[nr].ipaddr = 0;  // Free up connection
+ 554   4                      just_closed = TRUE;
+ 555   4              }
+ 556   3                              else
+ 557   3                              {
+ 558   4                                      // He has not ACK'd my FIN.  This happens when there is a simultaneous
+ 559   4                                      // close - I got his FIN but he has not yet ACK'd my FIN
+ 560   4                                      conxn[nr].state = STATE_CLOSING;
+ 561   4                              }
+ 562   3                      }
+ 563   2            else if (tcp->ack_number == conxn[nr].my_sequence)
+ 564   2            {
+ 565   3               // He has ACK'd my FIN but has not sent a FIN yet himself
+ 566   3               conxn[nr].state = STATE_FIN_WAIT_2;
+ 567   3            }
+ 568   2            break;
+ 569   2      
+ 570   2            
+ 571   2            case STATE_FIN_WAIT_2:
+ 572   2            // He may still be sending me data - should process it
+ 573   2                      conxn[nr].his_sequence += data_len;
+ 574   2            conxn[nr].his_ack = tcp->ack_number;
+ 575   2            
+ 576   2            if (tcp->flags & FLG_FIN)
+ 577   2            {
+ 578   3               conxn[nr].his_sequence++; // For his FIN flag
+ 579   3               tcp_send(FLG_ACK, 20, nr);
+ 580   3               conxn[nr].state = STATE_TIME_WAIT;
+ 581   3               conxn[nr].state = STATE_CLOSED;
+ 582   3               conxn[nr].ipaddr = 0;  // Free up struct area
+ 583   3               just_closed = TRUE;
+ 584   3            }
+ 585   2            break;
+ 586   2                  
+ 587   2                  
+ 588   2            case STATE_TIME_WAIT:
+ 589   2            // With this code, should not get here
+ 590   2             ;
+ 591   2            break;
+ 592   2      
+ 593   2            
+ 594   2            case STATE_CLOSING:
+ 595   2            // Simultaneous close has happened. I have received his FIN
+ 596   2            // but he has not yet ACK'd my FIN.  Waiting for ACK.
+ 597   2                      // Will not receive data in this state
+ 598   2                      conxn[nr].his_ack = tcp->ack_number;
+ 599   2                      
+ 600   2                      if (tcp->ack_number == conxn[nr].my_sequence)
+ 601   2            {
+ 602   3                         conxn[nr].state = STATE_TIME_WAIT;
+ 603   3               
+ 604   3               // Do not send any response to his ACK
+ 605   3               conxn[nr].state = STATE_CLOSED;
+ 606   3               conxn[nr].ipaddr = 0;  // Free up struct area
+ 607   3               just_closed = TRUE;
+ 608   3            }
+ 609   2            break;
+ 610   2      
+ 611   2            
+ 612   2            default:
+ 613   2            ;
+C51 COMPILER V8.05a   TCP                                                                  09/01/2010 15:06:33 PAGE 11  
+
+ 614   2            break;
+ 615   2         }
+ 616   1         
+ 617   1         // This is for debug, to see when conxn closes
+ 618   1         if (just_closed)
+ 619   1         {
+ 620   2            just_closed = FALSE;
+ 621   2           
+ 622   2         }
+ 623   1      }
+ 624          
+ 625          
+ 626          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2336    ----
+   CONSTANT SIZE    =     10    ----
+   XDATA SIZE       =    231    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      19
+   IDATA SIZE       =      6      25
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

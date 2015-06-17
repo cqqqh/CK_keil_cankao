@@ -1,0 +1,443 @@
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE HTTP
+OBJECT MODULE PLACED IN HTTP.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE HTTP.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net HTTP.C
+   6          //
+   7          // This module is the Web Server
+   8          // It currently serves a html text page and a jpeg image, or handles
+   9          // a POST message to turn an LED on or off.
+  10          // The HTTP protocol specification is at http://www.w3.org/Protocols/ 
+  11          //-----------------------------------------------------------------------------
+  12          #include <string.h>
+  13          //#include <stdlib.h>
+  14          #include <ctype.h>              // toupper
+  15          #include "C8051f340.h"
+  16          #include "net.h"
+  17          #include "cksum.h"
+  18          #include "analog.h"
+  19          #include "ip.h"
+  20          #include "tcp.h"
+  21          #include "http.h"
+  22          
+  23          
+  24          // These structures keep track of connection information
+  25          extern CONNECTION xdata conxn[];
+  26           
+  27          extern ULONG code my_ipaddr;
+  28          extern char xdata text[];
+  29          extern UINT idata cpu_temperature;
+  30          //extern UINT idata air_temperature;
+  31          extern UINT idata cpu_voltage;
+  32          extern char code html_header[];
+  33          extern char code web_page[];
+  34          extern char code jpeg_header[];
+  35          extern UCHAR code photo1_jpeg[];
+  36          extern UCHAR idata rcve_buf_allocated;
+  37          extern UCHAR idata debug;
+  38          bit CONTROL_LED;
+  39          void LightONOFF(bit b);
+  40          extern char xdata outbuf1[];
+  41          
+  42          void init_http(void)
+  43          {
+  44   1        CONTROL_LED = 0;
+  45   1        LightONOFF(CONTROL_LED);
+  46   1      }
+  47          
+  48          char * itoa(UINT value, char * buf, UCHAR radix)// int to asc码
+  49          {
+  50   1              UINT i;
+  51   1              char * ptr;
+  52   1              char * temphold;
+  53   1      
+  54   1              temphold = buf;
+  55   1              ptr = buf + 12;
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 2   
+
+  56   1              *--ptr = 0;             // Insert NULL char
+  57   1              do
+  58   1              {
+  59   2                 // First create string in reverse order
+  60   2                   i = (value % radix) + 0x30;
+  61   2                       if(i > 0x39)
+  62   2                       i += 7;
+  63   2                       *--ptr = i;
+  64   2               value = value / radix;
+  65   2              } while(value != 0);
+  66   1      
+  67   1              // Next, move the string 6 places to the left
+  68   1              // Include NULL character
+  69   1              for( ; (*buf++ = *ptr++); );    
+  70   1              return(temphold);
+  71   1      }
+  72          
+  73          //------------------------------------------------------------------------
+  74          // This function is the standard string search. The Keil library
+  75          // does not provide it.  It looks for one string in another string
+  76          // and returns a pointer to it if found, otherwise returns NULL. 
+  77          //------------------------------------------------------------------------
+  78          char * strstr(char * haystack, char * needle)
+  79          {
+  80   1              char *ptr1, *ptr2;
+  81   1              
+  82   1              // Protect against NULL pointer
+  83   1              if (*needle == 0) return(haystack);
+  84   1              for( ; *haystack; haystack++ )
+  85   1              {
+  86   2                      // Look for needle in haystack.  If there is a
+  87   2            // match then this will continue all the way
+  88   2            // until ptr1 reaches the NULL at the end of needle 
+  89   2                      for(ptr1 = needle, ptr2 = haystack; *ptr1 && (*ptr1 == *ptr2); ++ptr1, ++ptr2);
+  90   2                                                              
+  91   2                      // If there is a match then return pointer to needle in haystack
+  92   2                      if(*ptr1 == 0) return(haystack);        
+  93   2              }
+  94   1              return NULL;                    // no matching string found
+  95   1      }
+  96          
+  97          
+  98          
+  99          //------------------------------------------------------------------------
+ 100          // This sends an TCP segment to the ip layer.  The segment is 
+ 101          // is normally either a web page or a graphic.
+ 102          // See "TCP/IP Illustrated, Volume 1" Sect 17.3
+ 103          //------------------------------------------------------------------------
+ 104          void http_send(UCHAR xdata * outbuf, UINT len, UCHAR nr)
+ 105          {
+ 106   1         TCP_HEADER xdata * tcp;
+ 107   1         IP_HEADER xdata * ip;
+ 108   1         ULONG idata sum;
+ 109   1         UINT idata result;
+ 110   1                
+ 111   1         // Fill in TCP segment header
+ 112   1         tcp = (TCP_HEADER xdata *)(outbuf + 34);
+ 113   1         ip = (IP_HEADER xdata *)(outbuf + 14);
+ 114   1      
+ 115   1         tcp->source_port = HTTP_PORT;
+ 116   1         tcp->dest_port = conxn[nr].port;
+ 117   1         tcp->sequence = conxn[nr].my_sequence;
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 3   
+
+ 118   1         tcp->ack_number = conxn[nr].his_sequence;
+ 119   1            
+ 120   1              // Header is always 20 bytes long
+ 121   1         tcp->flags = 0x5000 | FLG_ACK | FLG_PSH;
+ 122   1         tcp->window = 1024;
+ 123   1         tcp->checksum = 0;
+ 124   1         tcp->urgent_ptr = 0;
+ 125   1         
+ 126   1         // Compute checksum including 12 bytes of pseudoheader
+ 127   1              // Must pre-fill 2 items in ip header to do this
+ 128   1              ip->dest_ipaddr = conxn[nr].ipaddr;
+ 129   1              ip->source_ipaddr = my_ipaddr;
+ 130   1                      
+ 131   1              // Sum source_ipaddr, dest_ipaddr, and entire TCP message 
+ 132   1              sum = (ULONG)cksum(outbuf + 26, 8 + len);
+ 133   1                                      
+ 134   1              // Add in the rest of pseudoheader which is
+ 135   1              // protocol id and TCP segment length
+ 136   1              sum += (ULONG)0x0006;
+ 137   1              sum += (ULONG)len;
+ 138   1      
+ 139   1              // In case there was a carry, add it back around
+ 140   1              result = (UINT)(sum + (sum >> 16));
+ 141   1              tcp->checksum = ~result;
+ 142   1         
+ 143   1              ip_send(outbuf, conxn[nr].ipaddr, TCP_TYPE, len);
+ 144   1      
+ 145   1         // (Re)start TCP retransmit timer
+ 146   1         conxn[nr].timer = TCP_TIMEOUT;
+ 147   1      }
+ 148          
+ 149          
+ 150          
+ 151          //------------------------------------------------------------------------
+ 152          // This searches a web page looking for a specified tag.  If found,
+ 153          // it replaces the tag with the text in * sub.  Tags are fixed length -
+ 154          // The first 4 chars of the tag is always "TAG:" and the rest of it
+ 155          // is always 4 chars for a total of 8 chars. 
+ 156          //------------------------------------------------------------------------
+ 157          void replace_tag(UCHAR xdata * start, char * tag, char * sub) 
+ 158          { 
+ 159   1         UCHAR idata i, flg;
+ 160   1         UCHAR xdata * ptr;
+ 161   1         
+ 162   1         // Find tag.  If not found - just return
+ 163   1         ptr = strstr(start, tag);
+ 164   1              if (ptr == NULL) return;
+ 165   1         
+ 166   1              flg = TRUE;
+ 167   1      
+ 168   1         // Replace the 8 char tag with the substitute text
+ 169   1              // Pad on the right with spaces
+ 170   1         for (i=0; i < 8; i++)
+ 171   1              {
+ 172   2              if (sub[i] == 0) flg = FALSE;
+ 173   2              if (flg) ptr[i] = sub[i]; else ptr[i] = SPACE;
+ 174   2              }
+ 175   1      }
+ 176          
+ 177          
+ 178          
+ 179          //------------------------------------------------------------------------
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 4   
+
+ 180          //      This serves up either a HTML page, a JPEG image, or controls an 
+ 181          // LED,  depending what it gets from the browser.  The received header
+ 182          // must contain the word "GET" or "POST" to be considered a valid request.
+ 183          // With HTTP 1.1 where the connection is left open, the header I send
+ 184          // should include content length. With HTTP 1.0 you can just close the
+ 185          // connection after sending the page and the browser knows its done. 
+ 186          //
+ 187          // The HTTP protocol specification is at http://www.w3.org/Protocols/ 
+ 188          //------------------------------------------------------------------------
+ 189          UINT http_server(UCHAR xdata * inbuf, UINT header_len, UCHAR nr, UCHAR resend)
+ 190          {
+ 191   1              UCHAR i;
+ 192   1              UINT idata body_len, hhdr_len, jhdr_len, page_len, jpeg_len;
+ 193   1              UINT idata sent, remaining;
+ 194   1              UCHAR xdata * outbuf;
+ 195   1              UCHAR xdata * ptr;
+ 196   1              UCHAR xdata * tcp_data;
+ 197   1              UCHAR idata request;
+ 198   1         static UCHAR idata post_flg = FALSE;
+ 199   1                              
+ 200   1              // Make sure this is a valid connection
+ 201   1              if (nr == NO_CONNECTION) return 0;
+ 202   1              
+ 203   1              // Compute start of TCP data
+ 204   1         
+ 205   1         // Save first 20 chars and seq number just in case
+ 206   1         // we need to re-generate page
+ 207   1         // TODO: if post, then save switch state infomation
+ 208   1         if (!resend)
+ 209   1         {
+ 210   2            tcp_data = inbuf + 34 + header_len;
+ 211   2            memcpy(conxn[nr].query, tcp_data, 20);
+ 212   2            conxn[nr].old_sequence = conxn[nr].my_sequence;
+ 213   2         }
+ 214   1         // If this is a resend, set sequence number to what it was
+ 215   1         // the last time we sent this
+ 216   1         else
+ 217   1         {
+ 218   2            tcp_data = inbuf;
+ 219   2            conxn[nr].my_sequence = conxn[nr].old_sequence;   
+ 220   2         }
+ 221   1         
+ 222   1         // Start off with no request
+ 223   1         request = NONE;
+ 224   1            
+ 225   1              // TODO: Calling strstr() on a large buffer takes a lot of time
+ 226   1         // so perhaps we could speed things up by limiting the search
+ 227   1         // range to the portion of the buffer where the item is expected
+ 228   1         // to be found
+ 229   1              
+ 230   1              // If it is a POST, then set a flag to start looking for the post
+ 231   1              // data of interest, which is the string "switch=".  It may arrive
+ 232   1              // in a later segment (Netscape seems to split up the POST message)
+ 233   1         if (strstr(tcp_data, "POST") != NULL) post_flg = TRUE; 
+ 234   1                 
+ 235   1         // See if this is a GET message
+ 236   1         else if (strstr(tcp_data, "GET") != NULL)
+ 237   1         {
+ 238   2            post_flg = FALSE;
+ 239   2            if (strstr(tcp_data, "photo1") != NULL) request = GET_JPEG;
+ 240   2            else if (strstr(tcp_data, "index") != NULL) request = GET_PAGE;
+ 241   2            else if (strstr(tcp_data, "/ ") != NULL) request = GET_PAGE;
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 5   
+
+ 242   2         }
+ 243   1         
+ 244   1         // If POST flag is "armed" then look for the "switch=" string
+ 245   1         // and if found, turn the LED on or off according to whether 
+ 246   1         // the browser is sending a 1 or a 0.
+ 247   1         if (post_flg)
+ 248   1         {
+ 249   2            ptr = strstr(tcp_data, "switch=");
+ 250   2            if (ptr != NULL)
+ 251   2            {
+ 252   3               // Move to space after equals sign
+ 253   3               // Set control indicator accordingly
+ 254   3               post_flg = FALSE;
+ 255   3               request = POST_PAGE;
+ 256   3               ptr += 7;
+ 257   3               if (*ptr == '1') {CONTROL_LED=0x0;}   
+ 258   3               else if (*ptr == '0') {CONTROL_LED=0x1;}
+ 259   3                       LightONOFF(CONTROL_LED);
+ 260   3                       P26=CONTROL_LED;
+ 261   3                       P24=CONTROL_LED;
+ 262   3                }
+ 263   2         }
+ 264   1      
+ 265   1         if ((request == GET_PAGE) || (request == POST_PAGE))
+ 266   1         {
+ 267   2            // Figure out sizes
+ 268   2            hhdr_len = strlen(html_header);
+ 269   2            page_len = strlen(web_page);
+ 270   2            body_len = hhdr_len + page_len;
+ 271   2            
+ 272   2            // Free memory holding received message.  The message from the
+ 273   2            // browser can be 500+ bytes long so this is a significant 
+ 274   2            // chunk out of the available malloc space of 1500 bytes
+ 275   2            if (!resend) { rcve_buf_allocated = FALSE;}
+ 276   2      
+ 277   2            // Allocate memory for entire outgoing message including
+ 278   2            // 14 byte Ethernet + 20 byte IP + 20 byte TCP headers
+ 279   2            // Allow 1 byte for NULL char at the end
+ 280   2           // outbuf = (UCHAR xdata *)malloc(54 + body_len + 1);
+ 281   2           // if (outbuf == NULL)
+ 282   2            //{
+ 283   2              // return 0;
+ 284   2            //}
+ 285   2            outbuf = outbuf1;
+ 286   2            // Copy page data.  This moves data from flash into RAM.  It is
+ 287   2            // an undesirable process, but must get data into RAM to replace
+ 288   2            // tags 
+ 289   2                      memcpy(outbuf + 54, html_header, hhdr_len);
+ 290   2                      memcpy(outbuf + 54 + hhdr_len, web_page, page_len);
+ 291   2                              
+ 292   2              outbuf[54 + body_len] = 0;              // Append NULL 
+ 293   2         
+ 294   2            // Replace length tag with actual value
+ 295   2              itoa(page_len, text, 10);
+ 296   2                      replace_tag(outbuf + 54, "TAG:LEN1", text);
+ 297   2                      
+ 298   2                      // Replace CPU temperature tag with actual value   重置CPU温度为实际值           （需要修改的地方）
+ 299   2                      itoa(cpu_temperature/100, text, 10);
+ 300   2                      i=strlen(text);
+ 301   2                      text[i]='.';
+ 302   2                      i++;
+ 303   2                      itoa(cpu_temperature%100, text+i, 10);
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 6   
+
+ 304   2                      replace_tag(outbuf + 54, "TAG:TMP1", text);
+ 305   2      
+ 306   2                      /*itoa(air_temperature/1000, text, 10);
+ 307   2                      i=strlen(text);
+ 308   2                      text[i]='.';
+ 309   2                      i++;
+ 310   2                      itoa(air_temperature%1000, text+i, 10);
+ 311   2                      replace_tag(outbuf + 54, "TAG:TMP2", text);     */
+ 312   2      
+ 313   2                      // Replace CPU voltage tag with actual value X 100        重置CPU电压基准为实际电压的100倍
+ 314   2                      // Insert decimal point between first and second digits   在第一和第二个数之间插入小数点           （需要修改的
+             -地方）
+ 315   2                      itoa(cpu_voltage/1000, text, 10);
+ 316   2                      i=strlen(text);
+ 317   2                      text[i]='.';
+ 318   2                      i++;
+ 319   2                      itoa(cpu_voltage%1000, text+i, 10);
+ 320   2                      replace_tag(outbuf + 54, "TAG:VOL1", text);
+ 321   2            
+ 322   2            // Insert the word CHECKED into the html so the browser will
+ 323   2                      // check the correct LED state indicator box 
+ 324   2            if (CONTROL_LED == OFF) replace_tag(outbuf + 54, "TAG:CHK1", "CHECKED");
+ 325   2            else replace_tag(outbuf + 54, "TAG:CHK2", "CHECKED");
+ 326   2            
+ 327   2            // Segment length = body_len + 20
+ 328   2            http_send(outbuf, body_len + 20, nr);
+ 329   2            conxn[nr].my_sequence += body_len;
+ 330   2         }
+ 331   1         else if (request == GET_JPEG)
+ 332   1         {
+ 333   2            // Ths browser has requested the jpeg image.  First figure out
+ 334   2            // sizes - cannot use sizeof() for jpeg here because it is in
+ 335   2            // another module.  Just directly specify length of it
+ 336   2            jhdr_len = strlen(jpeg_header);
+ 337   2            jpeg_len = 30000;//6194;
+ 338   2            body_len = jhdr_len + jpeg_len;
+ 339   2            
+ 340   2            // Free memory holding received message.  The message from the
+ 341   2            // browser can be 500+ bytes long so this is a significant 
+ 342   2            // chunk out of the available malloc space of 1500 bytes
+ 343   2            if (!resend) { rcve_buf_allocated = FALSE;}
+ 344   2      
+ 345   2            // First send the header and enough of the jpeg to make 1000 bytes.
+ 346   2            // The value of 1000 is arbitrary, but must be stay under 1500. 
+ 347   2            if (body_len < 1000) remaining = body_len; else remaining = 1000; 
+ 348   2      //      outbuf = (UCHAR xdata *)malloc(54 + remaining + 1);
+ 349   2            //if (outbuf == NULL)
+ 350   2            //{
+ 351   2              // return 0;
+ 352   2            //}
+ 353   2            outbuf=outbuf1;
+ 354   2            memcpy(outbuf + 54, jpeg_header, jhdr_len);
+ 355   2                memcpy(outbuf + 54 + jhdr_len, photo1_jpeg, remaining - jhdr_len);
+ 356   2                        
+ 357   2            outbuf[54 + remaining] = 0;               // Append NULL
+ 358   2      
+ 359   2            // Replace jpeg length tag with actual value
+ 360   2            itoa(jpeg_len, text, 10);
+ 361   2                      replace_tag(outbuf + 54, "TAG:LEN2", text);
+ 362   2      
+ 363   2            http_send(outbuf, remaining + 20, nr);
+ 364   2            sent = remaining - jhdr_len;
+C51 COMPILER V8.05a   HTTP                                                                 09/01/2010 15:06:32 PAGE 7   
+
+ 365   2            conxn[nr].my_sequence += remaining;
+ 366   2           
+ 367   2            // Send the rest of the jpeg file in 1000 byte chunks.  This sends about
+ 368   2            // 6 segments of 1000 bytes back to back, but we should actually process
+ 369   2            // acks from the other end to make sure we are not sending more than the
+ 370   2            // other end can receive.  Most systems can handle 6K
+ 371   2            while (sent < jpeg_len)
+ 372   2            {
+ 373   3               remaining = jpeg_len - sent;
+ 374   3               if (remaining > 1000) remaining = 1000;
+ 375   3             //  outbuf = (UCHAR xdata *)malloc(54 + remaining + 1);
+ 376   3               outbuf=outbuf1;
+ 377   3                      // if (outbuf == NULL)
+ 378   3               //{
+ 379   3                //  return 0;
+ 380   3               //}
+ 381   3               
+ 382   3               memcpy(outbuf + 54, photo1_jpeg + sent, remaining);
+ 383   3                                 
+ 384   3               outbuf[54 + remaining] = 0;            // Append NULL
+ 385   3               http_send(outbuf, remaining + 20, nr);
+ 386   3               sent += remaining;
+ 387   3               conxn[nr].my_sequence += remaining;
+ 388   3            }
+ 389   2         }
+ 390   1         else
+ 391   1         {
+ 392   2            // The incoming HTTP message did not warrant a response
+ 393   2            return 0;
+ 394   2         }
+ 395   1         
+ 396   1         // Return number of bytes sent, not including TCP header
+ 397   1              return(body_len);
+ 398   1      }
+ 399          
+ 400          
+ 401          
+ 402          
+ 403          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1994    ----
+   CONSTANT SIZE    =     95    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      53
+   IDATA SIZE       =      1      23
+   BIT SIZE         =      1    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

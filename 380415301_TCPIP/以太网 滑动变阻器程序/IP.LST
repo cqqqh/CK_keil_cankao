@@ -1,0 +1,190 @@
+C51 COMPILER V8.05a   IP                                                                   09/01/2010 15:06:32 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE IP
+OBJECT MODULE PLACED IN IP.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE IP.C OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // Copyright (c) 2002 Jim Brady
+   3          // Do not use commercially without author's permission
+   4          // Last revised August 2002
+   5          // Net IP.C
+   6          //
+   7          // This module is the IP layer
+   8          // Refer to RFC 791, 1122, and RFC 815 (fragmentation)
+   9          //-----------------------------------------------------------------------------
+  10          #include <string.h>
+  11          #include "C8051f340.h"
+  12          #include "net.h"
+  13          #include "cksum.h"
+  14          #include "arp.h"
+  15          #include "icmp.h"
+  16          #include "udp.h"
+  17          #include "tcp.h"
+  18          #include "ip.h"
+  19          
+  20          extern UCHAR idata debug;
+  21          extern ULONG code my_ipaddr;
+  22          WAIT xdata wait;
+  23          
+  24          
+  25          //------------------------------------------------------------------------
+  26          // This handles outgoing IP datagrams.  It adds the 20 byte IP header
+  27          // and checksum then forwards the IP datagram to the Ethernet layer
+  28          // for sending. See "TCP/IP Illustrated, Volume 1" Sect 3.2
+  29          //------------------------------------------------------------------------
+  30          void ip_send(UCHAR xdata * outbuf, ULONG ipaddr, UCHAR proto_id, UINT len)
+  31          {
+  32   1         IP_HEADER xdata * ip;
+  33   1         UCHAR xdata * hwaddr;
+  34   1         static UINT ip_ident = 0;
+  35   1         
+  36   1         ip = (IP_HEADER xdata *)(outbuf + 14);
+  37   1         ip->ver_len = 0x45;          // IPv4 with 20 byte header
+  38   1         ip->type_of_service = 0;
+  39   1         ip->total_length = 20 + len;
+  40   1         ip->identifier = ip_ident++;     // sequential identifier
+  41   1         ip->fragment_info = 0;           // not fragmented
+  42   1         ip->time_to_live = 32;           // max hops
+  43   1         ip->protocol_id = proto_id;      // type of payload
+  44   1         ip->header_cksum = 0;
+  45   1         ip->source_ipaddr = my_ipaddr;
+  46   1         
+  47   1         // Outgoing IP address
+  48   1         ip->dest_ipaddr = ipaddr;
+  49   1      
+  50   1         // Compute and insert complement of checksum of ip header
+  51   1         // Outgoing ip header length is always 20 bytes
+  52   1         ip->header_cksum = ~cksum(outbuf + 14, 20);
+  53   1         
+  54   1         // Use ARP to get hardware address to send this to
+  55   1         hwaddr = arp_resolve(ip->dest_ipaddr);
+C51 COMPILER V8.05a   IP                                                                   09/01/2010 15:06:32 PAGE 2   
+
+  56   1              
+  57   1              // Null means that the ARP resolver did not find the IP address
+  58   1              // in its cache so had to send an ARP request
+  59   1              if (hwaddr == NULL)
+  60   1              {
+  61   2                      // Fill in the destination information so ehrn the ARP response
+  62   2                      // arrives we can identify it and know what to do when we get it
+  63   2              wait.buf = outbuf;
+  64   2                      wait.ipaddr = ip->dest_ipaddr;
+  65   2                      wait.proto_id = proto_id;
+  66   2                      wait.len = len;
+  67   2                      wait.timer = ARP_TIMEOUT; 
+  68   2              return;
+  69   2              }       
+  70   1              
+  71   1              eth_send(outbuf, hwaddr, IP_PACKET, 20 + len);
+  72   1      }
+  73          
+  74          
+  75          
+  76          //------------------------------------------------------------------------
+  77          // This handles incoming IP datagrams from the Ethernet layer
+  78          // See "TCP/IP Illustrated, Volume 1" Sect 3.2
+  79          //------------------------------------------------------------------------
+  80          void ip_rcve(UCHAR xdata * inbuf)
+  81          {
+  82   1              IP_HEADER xdata * ip;
+  83   1              UINT idata header_len, payload_len;
+  84   1                      
+  85   1         ip = (IP_HEADER xdata *)(inbuf + 14);
+  86   1                  
+  87   1         // Make sure it is addressed to my IP address
+  88   1         if (ip->dest_ipaddr != my_ipaddr) return;
+  89   1      
+  90   1         // Validate checksum of ip header
+  91   1              header_len = 4 * (0x0F & ip->ver_len);
+  92   1              payload_len = ip->total_length - header_len;
+  93   1         if (cksum(inbuf + 14, header_len) != 0xFFFF)
+  94   1              {
+  95   2                 return; 
+  96   2         }
+  97   1              
+  98   1              // Make sure incoming message is IP version 4
+  99   1              if ((ip->ver_len >> 4) != 0x04)
+ 100   1              {
+ 101   2              return;
+ 102   2              }
+ 103   1      
+ 104   1              // Make sure incoming message is not fragmented because
+ 105   1         // we cannot handle fragmented messages
+ 106   1         if ((ip->fragment_info & 0x3FFF) != 0)
+ 107   1         {
+ 108   2                 return; 
+ 109   2         }
+ 110   1      
+ 111   1         // At this point we have received a valid IP datagram addressed
+ 112   1         // to me.  We do not use header options, and do not forward
+ 113   1         // messages, so in the unlikely event there are header options,
+ 114   1         // delete them and shift the data down. The advantage is that
+ 115   1         // layers such as UDP and TCP know where their data starts
+ 116   1              if (header_len > 20)
+ 117   1              {
+C51 COMPILER V8.05a   IP                                                                   09/01/2010 15:06:32 PAGE 3   
+
+ 118   2                              
+ 119   2            // Use memmove because of overlap
+ 120   2            memmove(inbuf + 34, inbuf + 14 + header_len, payload_len);
+ 121   2      
+ 122   2                      // Adjust info to reflect the move
+ 123   2                      header_len = 20;
+ 124   2                      ip->ver_len = 0x45;
+ 125   2                      ip->total_length = 20 + payload_len;
+ 126   2              }
+ 127   1              
+ 128   1              
+ 129   1              // Look at protocol ID byte and call the appropriate
+ 130   1         // function to handle the received message.  See 
+ 131   1         // "TCP/IP Illustrated, Volume 1" Sect 1.7 and RFC 791
+ 132   1         // for values for various protocols
+ 133   1         switch (ip->protocol_id)
+ 134   1              {
+ 135   2                 case ICMP_TYPE:
+ 136   2            icmp_rcve(inbuf, payload_len);
+ 137   2                      break;
+ 138   2      
+ 139   2            case IGMP_TYPE:
+ 140   2                ;
+ 141   2                      // We cannot handle IGMP messages
+ 142   2                      break;
+ 143   2                        
+ 144   2                      case UDP_TYPE:
+ 145   2            udp_rcve(inbuf, payload_len);
+ 146   2                      break;
+ 147   2      
+ 148   2                      case TCP_TYPE:   
+ 149   2            tcp_rcve(inbuf, payload_len);
+ 150   2                      break;
+ 151   2      
+ 152   2            default:
+ 153   2            
+ 154   2            break;
+ 155   2         }
+ 156   1      }
+ 157          
+ 158          
+ 159          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    578    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     10    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2      15
+   IDATA SIZE       =   ----       4
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

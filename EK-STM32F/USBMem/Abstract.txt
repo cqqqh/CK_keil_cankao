@@ -1,0 +1,28 @@
+The Memory project is a demo program for the ST 'STM32F103VB'
+microcontroller using 'EK-STM32F' Evaluation Board, compliant 
+to Cortex Microcontroller Software Interface Standard (CMSIS v2.0).
+
+Example functionality:
+ - Clock Settings:
+   - XTAL    =            8 MHz
+   - SYSCLK  =           72 MHz
+   - HCLK    = SYSCLK  = 72 MHz
+   - USB clock         = 48 MHz
+
+It demonstrates an USB Memory based on USB Mass Storage Class.
+
+LEDs are used to display the following:
+  - PC4: LED_RD   is on when USB Device is performing Read access
+  - PC5: LED_WR   is on when USB Device is performing Write access
+  - PC6: LED_CFG  is on when USB Device is configured
+  - PC7: LED_SUSP is on when USB Device is suspended
+
+
+The USB Memory is automatically recognized by the host PC
+running Windows which will load a generic Mass Storage driver.
+
+
+The Memory program is available for the following targets:
+
+  STM32F103 Flash: configured for on-chip Flash ROM
+                   (used for production or target debugging)

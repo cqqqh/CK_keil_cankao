@@ -1,0 +1,308 @@
+C51 COMPILER V9.06   SD                                                                    04/20/2012 16:19:01 PAGE 1   
+
+
+C51 COMPILER V9.06, COMPILATION OF MODULE SD
+OBJECT MODULE PLACED IN sd.OBJ
+COMPILER INVOKED BY: D:\Program Files\Keil\C51\BIN\C51.EXE sd.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "spi.h"
+   2          #include "sd.h"
+   3          /*-------------------------------------------------------------------------------------------------*/
+   4          unsigned char SD_init(void)
+   5          {
+   6   1              unsigned char response = 0xff;
+   7   1              unsigned char retry = 0;
+   8   1              unsigned char i = 0;
+   9   1                      
+  10   1              FCLK_SLOW(); /*set SPI clk <= 400kHz*/
+  11   1      
+  12   1              SD_CS_DEASSERT;
+  13   1                      for(i=0;i<10;i++)
+  14   1                              SPI_transmit_m(0xff); /*74 clk*/
+  15   1      
+  16   1              do
+  17   1              {       
+  18   2                      response = SD_sendCommand(CMD0, 0); /*send 'reset & go idle' command, the response should be 0x01 if suc
+             -cessfull*/
+  19   2                      retry++;
+  20   2                      if(retry > 0xfe)
+  21   2                              return 1; /*time out*/
+  22   2              }while(response != 0x01);
+  23   1      
+  24   1              retry = 0;
+  25   1              do
+  26   1              {
+  27   2                      response = SD_sendCommand(CMD1, 0); /*activate card's initialization process, the response should be 0x0
+             -0 if successfull*/
+  28   2              response = SD_sendCommand(CMD1, 0); /*same command sent again for compatibility with some cards*/
+  29   2                      retry++;
+  30   2              if(retry > 0xfe) 
+  31   2                              return 1; /*time out*/
+  32   2              }while(response);
+  33   1      
+  34   1              SD_sendCommand(CMD16, 512); /*set block size to 512*/
+  35   1      
+  36   1              FCLK_FAST(); /*set SPI clk fast*/
+  37   1      
+  38   1              return 0; /*normal return*/
+  39   1      }
+  40          
+  41          /*-------------------------------------------------------------------------------------------------*/
+  42          unsigned char SD_sendCommand(unsigned char cmd, unsigned long arg)
+  43          {
+  44   1              unsigned char response = 0xff;
+  45   1              unsigned char retry = 0;
+  46   1      
+  47   1              SD_CS_ASSERT;
+  48   1      
+  49   1              SPI_transmit_m(cmd); /*send command, first two bits always '01'*/
+  50   1              SPI_transmit_m(arg>>24);
+  51   1              SPI_transmit_m(arg>>16);
+  52   1              SPI_transmit_m(arg>>8);
+  53   1              SPI_transmit_m(arg);
+C51 COMPILER V9.06   SD                                                                    04/20/2012 16:19:01 PAGE 2   
+
+  54   1              SPI_transmit_m(0x95);   /*CRC, it must be 0x95 when cmd0*/
+  55   1              
+  56   1              do/*wait response*/
+  57   1              {
+  58   2                      SPI_receive_m(&response); /*equal to "response = SPI_receive();"*/
+  59   2              if(retry++ > 0xfe) break; /*time out*/
+  60   2              }while(response == 0xff); 
+  61   1              
+  62   1              SD_CS_DEASSERT;
+  63   1              SPI_transmit_m(0xff);
+  64   1      
+  65   1              return response; 
+  66   1      }
+  67          /*-------------------------------------------------------------------------------------------------*/
+  68          unsigned char SD_readSingleBlock(unsigned char *buff, unsigned long startBlock)
+  69          {
+  70   1              if(SD_sendCommand(CMD17, startBlock<<9)) return 1;
+  71   1      
+  72   1              if(receive_DataBlock(buff, 512)) return 1;
+  73   1      
+  74   1              return 0;
+  75   1      }
+  76          /*-------------------------------------------------------------------------------------------------*/
+  77          unsigned char SD_writeSingleBlock(unsigned char *buff, unsigned long startBlock)
+  78          {
+  79   1              if(SD_sendCommand(CMD24, startBlock<<9)) return 1;
+  80   1              
+  81   1              if(transmit_DataBlock(buff, 0xfe)) return 1;
+  82   1      
+  83   1              return 0;
+  84   1      }
+  85          /*-------------------------------------------------------------------------------------------------*/
+  86          unsigned char SD_readMultipleBlock(unsigned char *buff, unsigned long startBlock, unsigned long totalBlock
+             -s)
+  87          {
+  88   1              unsigned char response = 0xff;
+  89   1              unsigned int retry = 0;
+  90   1              unsigned int nbyte = 512;
+  91   1      
+  92   1              if(SD_sendCommand(CMD18, startBlock<<9)) return 1;
+  93   1      
+  94   1              SD_CS_ASSERT;
+  95   1      
+  96   1              do 
+  97   1              {       
+  98   2                      do /*wait for start block token 0xfe (0x11111110)*/
+  99   2                      {
+ 100   3                              SPI_receive_m(&response);
+ 101   3                      if(retry++ > 0xfffe) /*time out error*/
+ 102   3                              {
+ 103   4                                      SD_CS_DEASSERT; 
+ 104   4                                      return 1;       
+ 105   4                              }
+ 106   3                      }while(response != 0xfe); /*wait response*/
+ 107   2      
+ 108   2                      do /*Receive the data block into buffer*/
+ 109   2                      {                                                       
+ 110   3                              SPI_receive_m(buff++);
+ 111   3                              SPI_receive_m(buff++);
+ 112   3                              SPI_receive_m(buff++);
+ 113   3                              SPI_receive_m(buff++);
+ 114   3                      }while (nbyte -= 4);
+C51 COMPILER V9.06   SD                                                                    04/20/2012 16:19:01 PAGE 3   
+
+ 115   2      
+ 116   2                      SPI_receive(); /*Discard CRC*/
+ 117   2                      SPI_receive();
+ 118   2      
+ 119   2                      nbyte = 512;
+ 120   2                      retry = 0;
+ 121   2      
+ 122   2              }while (--totalBlocks);
+ 123   1      
+ 124   1              SD_sendCommand(CMD12, 0); /*STOP_TRANSMISSION*/
+ 125   1      
+ 126   1              SD_CS_DEASSERT;
+ 127   1              SPI_transmit_m(0xff); /*extra 8 clk*/
+ 128   1      
+ 129   1              return 0;
+ 130   1      }
+ 131          
+ 132          /*-------------------------------------------------------------------------------------------------*/
+ 133          unsigned char SD_writeMultipleBlock(unsigned char *buff, unsigned long startBlock, unsigned long totalBloc
+             -ks)
+ 134          {
+ 135   1              unsigned char response = 0xff; /*response from sd card*/
+ 136   1              unsigned char bc = 0; 
+ 137   1              unsigned int retry = 0;
+ 138   1      
+ 139   1              if(SD_sendCommand(CMD25, startBlock<<9)) return 1;
+ 140   1      
+ 141   1              SD_CS_ASSERT;
+ 142   1      
+ 143   1              do 
+ 144   1              {
+ 145   2                      SPI_transmit(0xfc); /*Send start block token 0xfc (0x11111100)*/
+ 146   2         
+ 147   2                      do /*ransmit the 512 byte data block to SDC*/
+ 148   2                      {                                               
+ 149   3                              SPI_transmit_m(*buff++);
+ 150   3                              SPI_transmit_m(*buff++);
+ 151   3                      } while (--bc);
+ 152   2      
+ 153   2                      SPI_transmit_m(0xFF); /* CRC (Dummy) */
+ 154   2                      SPI_transmit_m(0xFF);
+ 155   2                              
+ 156   2                      SPI_receive_m(&response);
+ 157   2                      if( (response & 0x1f) != 0x05) /*response= 0bXXX0AAA1 ; AAA='010' - data accepted*/
+ 158   2                      {                              /*AAA='101'-data rejected due to CRC error*/
+ 159   3                               SD_CS_DEASSERT;           /*AAA='110'-data rejected due to write error*/
+ 160   3                               return 1;
+ 161   3                      }
+ 162   2      
+ 163   2                      retry = 0;
+ 164   2                      while(SPI_receive()!=0xff) /*wait for SD card to complete writing and get idle*/
+ 165   2                              if(retry++ > 0xfffe){SD_CS_DEASSERT; return 1;}
+ 166   2                      SPI_transmit_m(0xff); /*extra 8 bits*/
+ 167   2      
+ 168   2              }while (--totalBlocks);
+ 169   1      
+ 170   1              SPI_transmit_m(0xfd); /*send 'stop transmission token'*/
+ 171   1      
+ 172   1              while(SPI_receive()!=0xff) //wait for SD card to complete writing and get idle
+ 173   1                      if(retry++ > 0xfffe){SD_CS_DEASSERT; return 1;}
+ 174   1      
+ 175   1              SD_CS_DEASSERT;
+C51 COMPILER V9.06   SD                                                                    04/20/2012 16:19:01 PAGE 4   
+
+ 176   1              SPI_transmit_m(0xff);
+ 177   1      
+ 178   1              return 0;
+ 179   1      }
+ 180          /*-------------------------------------------------------------------------------------------------*/
+ 181          unsigned char SD_erase(unsigned long startBlock, unsigned long totalBlocks)
+ 182          {
+ 183   1              unsigned char response;
+ 184   1      
+ 185   1              response = SD_sendCommand(CMD32, startBlock<<9); /*send starting block address*/
+ 186   1              if(response != 0x00) /*check for SD status: 0x00 is OK*/
+ 187   1                      return response;
+ 188   1      
+ 189   1              response = SD_sendCommand(CMD33,(startBlock + totalBlocks - 1)<<9); /*send end block address*/
+ 190   1              if(response != 0x00)
+ 191   1                      return response;
+ 192   1      
+ 193   1              response = SD_sendCommand(CMD38, 0); /*erase all selected blocks*/
+ 194   1              if(response != 0x00)
+ 195   1                      return response;
+ 196   1      
+ 197   1              return 0; /*normal return*/
+ 198   1      }
+ 199          /*-------------------------------------------------------------------------------------------------*/
+ 200          unsigned char receive_DataBlock(
+ 201                  unsigned char *buff, /* Data buffer to store received data */ 
+ 202                  unsigned int btr /* Byte count (must be multiple of 4) */
+ 203          )
+ 204          {
+ 205   1              unsigned char response = 0xff;
+ 206   1              unsigned int retry = 0;
+ 207   1      
+ 208   1              SD_CS_ASSERT;
+ 209   1              do /*wait for start block token 0xfe (0x11111110)*/
+ 210   1              {
+ 211   2                      SPI_receive_m(&response);
+ 212   2              if(retry++ > 0xfffe) /*time out error*/
+ 213   2                      {
+ 214   3                              SD_CS_DEASSERT; 
+ 215   3                              return 1;       
+ 216   3                      }
+ 217   2              }while(response != 0xfe); /*wait response*/
+ 218   1      
+ 219   1              do /*Receive the data block into buffer*/
+ 220   1              {                                                               
+ 221   2                      SPI_receive_m(buff++);
+ 222   2                      SPI_receive_m(buff++);
+ 223   2                      SPI_receive_m(buff++);
+ 224   2                      SPI_receive_m(buff++);
+ 225   2              }while(btr -= 4);
+ 226   1      
+ 227   1              SPI_receive(); /*Discard CRC two bytes*/
+ 228   1              SPI_receive();
+ 229   1      
+ 230   1              SD_CS_DEASSERT;
+ 231   1              SPI_transmit_m(0xff); /*extra 8 clk*/
+ 232   1      
+ 233   1              return 0;
+ 234   1      }
+ 235          /*-------------------------------------------------------------------------------------------------*/
+ 236          unsigned char transmit_DataBlock(
+ 237                  const unsigned char *buff, /* 512 byte data block to be transmitted */
+C51 COMPILER V9.06   SD                                                                    04/20/2012 16:19:01 PAGE 5   
+
+ 238                  unsigned char token /* Data/Stop token */
+ 239          )
+ 240          {
+ 241   1              unsigned char response = 0xff; 
+ 242   1              unsigned char bc = 0;
+ 243   1              unsigned int retry = 0;
+ 244   1      
+ 245   1              SD_CS_ASSERT;
+ 246   1              
+ 247   1              SPI_transmit_m(token); /*send start block token 0xfe (0x11111110)*/
+ 248   1      
+ 249   1              do /*transmit the 512 byte data block to SD card*/
+ 250   1              {                                       
+ 251   2                      SPI_transmit_m(*buff++);
+ 252   2                      SPI_transmit_m(*buff++);
+ 253   2              }while (--bc);
+ 254   1      
+ 255   1              SPI_transmit_m(0xff); /*CRC (Dummy)*/
+ 256   1              SPI_transmit_m(0xff);
+ 257   1      
+ 258   1              SPI_receive_m(&response);
+ 259   1              if( (response & 0x1f) != 0x05) /*response= 0bXXX0AAA1 ; AAA='010' - data accepted*/
+ 260   1              {                              /*AAA='101'-data rejected due to CRC error*/
+ 261   2                       SD_CS_DEASSERT;           /*AAA='110'-data rejected due to write error*/
+ 262   2                       return 1;
+ 263   2              }
+ 264   1      
+ 265   1              while(SPI_receive()!=0xff) //wait until the SD is not busy
+ 266   1                      if(retry++ > 0xfffe){SD_CS_DEASSERT; return 1;}
+ 267   1      
+ 268   1              SD_CS_DEASSERT;
+ 269   1              SPI_transmit_m(0xff); /*extra 8 clk*/
+ 270   1      
+ 271   1              return 0;
+ 272   1      }
+ 273          /*-------------------------------------------------------------------------------------------------*/
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1600    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----      71
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

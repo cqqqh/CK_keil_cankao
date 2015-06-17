@@ -1,0 +1,177 @@
+C51 COMPILER V8.05a   CP220X_REG                                                           09/01/2010 15:06:33 PAGE 1   
+
+
+C51 COMPILER V8.05a, COMPILATION OF MODULE CP220X_REG
+OBJECT MODULE PLACED IN CP220x_REG.OBJ
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE CP220x_REG.c OMF2 OPTIMIZE(9,SPEED) BROWSE DEBUG
+
+line level    source
+
+   1          //-----------------------------------------------------------------------------
+   2          // CP220x_REG.c
+   3          //-----------------------------------------------------------------------------
+   4          // Copyright 2006 Silicon Laboratories, Inc.
+   5          // http://www.silabs.com
+   6          //
+   7          // Program Description:
+   8          //
+   9          // CP220x Register Definitions.
+  10          //
+  11          // FID:
+  12          // Target:         Multiple
+  13          // Tool chain:     Keil C51 7.20 / Keil EVAL C51
+  14          //                 Silicon Laboratories IDE version 2.72
+  15          // Command Line:   See Readme.txt
+  16          // Project Name:   CP220x_Ethernet_Routines
+  17          //
+  18          //
+  19          //
+  20          // Release 1.0
+  21          //    -Initial Release (FB)
+  22          //    -30 MAY 2006
+  23          //
+  24          //-----------------------------------------------------------------------------
+  25          // Direct Register Definitions
+  26          //-----------------------------------------------------------------------------
+  27          volatile unsigned char xdata     RAMADDRH     _at_   0x3F08;   // RAM Address Pointer High Byte
+  28          volatile unsigned char xdata     RAMADDRL     _at_   0x3F09;   // RAM Address Pointer Low Byte
+  29          volatile unsigned char xdata     RAMRXDATA    _at_   0x3F02;   // RXFIFO RAM Data Register
+  30          volatile unsigned char xdata     RAMTXDATA    _at_   0x3F04;   // TXBUFF RAM Data Register
+  31          volatile unsigned char xdata     FLASHADDRH   _at_   0x3F69;   // Flash Address Pointer High Byte
+  32          volatile unsigned char xdata     FLASHADDRL   _at_   0x3F68;   // Flash Address Pointer Low Byte
+  33          volatile unsigned char xdata     FLASHAUTORD  _at_   0x3F05;   // Flash Autoread w/ increment
+  34          volatile unsigned char xdata     FLASHDATA    _at_   0x3F06;   // Flash Read/Write Data Register
+  35          volatile unsigned char xdata     FLASHKEY     _at_   0x3F67;   // Flash Lock and Key
+  36          volatile unsigned char xdata     FLASHERASE   _at_   0x3F6A;   // Flash Erase
+  37          volatile unsigned char xdata     FLASHSTA     _at_   0x3F7B;   // Flash Status
+  38          volatile unsigned char xdata     MACADDR      _at_   0x3F0A;   // MAC Address Pointer
+  39          volatile unsigned char xdata     MACDATAH     _at_   0x3F0B;   // MAC Data Register High Byte
+  40          volatile unsigned char xdata     MACDATAL     _at_   0x3F0C;   // MAC Data Register Low Byte
+  41          volatile unsigned char xdata     MACRW        _at_   0x3F0D;   // MAC Read/Write Initiate
+  42          volatile unsigned char xdata     INT0         _at_   0x3F63;   // Interrupt Status Register 0 (Self-Cleari
+             -ng)
+  43          volatile unsigned char xdata     INT0RD       _at_   0x3F76;   // Interrupt Status Register 0 (Read-Only)
+  44          volatile unsigned char xdata     INT0EN       _at_   0x3F64;   // Interrupt Enable Register 0
+  45          volatile unsigned char xdata     INT1         _at_   0x3F7F;   // Interrupt Status Register 1 (Self-Cleari
+             -ng)
+  46          volatile unsigned char xdata     INT1RD       _at_   0x3F7E;   // Interrupt Status Register 1 (Read-Only)
+  47          volatile unsigned char xdata     INT1EN       _at_   0x3F7D;   // Interrupt Enable Register 1
+  48          volatile unsigned char xdata     VDMCN        _at_   0x3F13;   // VDD Monitor Control Register
+  49          volatile unsigned char xdata     SWRST        _at_   0x3F75;   // Software Reset Register
+  50          volatile unsigned char xdata     RSTSTA       _at_   0x3F73;   // Reset Source Status Register
+  51          volatile unsigned char xdata     RSTEN        _at_   0x3F72;   // Reset Enable Register
+  52          volatile unsigned char xdata     IOPWR        _at_   0x3F70;   // Port Input/Output Power
+  53          volatile unsigned char xdata     OSCPWR       _at_   0x3F7C;   // Oscillator Power
+C51 COMPILER V8.05a   CP220X_REG                                                           09/01/2010 15:06:33 PAGE 2   
+
+  54          volatile unsigned char xdata     RXFILT       _at_   0x3F10;   // Receive Filter Configuraton
+  55          volatile unsigned char xdata     RXCN         _at_   0x3F11;   // Receive Control
+  56          volatile unsigned char xdata     RXSTA        _at_   0x3F12;   // Receive Status
+  57          volatile unsigned char xdata     RXAUTORD     _at_   0x3F01;   // Receive Autoread w/ increment
+  58          volatile unsigned char xdata     RXHASHH      _at_   0x3F0E;   // Receive Hash Table High Byte
+  59          volatile unsigned char xdata     RXHASHL      _at_   0x3F0F;   // Receive Hash Table Low Byte
+  60          volatile unsigned char xdata     CPINFOH      _at_   0x3F1D;   // Current RX Packet Information High Byte
+  61          volatile unsigned char xdata     CPINFOL      _at_   0x3F1E;   // Current RX Packet Information Low Byte
+  62          volatile unsigned char xdata     CPLENH       _at_   0x3F1F;   // Current RX Packet Length High Byte
+  63          volatile unsigned char xdata     CPLENL       _at_   0x3F20;   // Current RX Packet Length Low Byte
+  64          volatile unsigned char xdata     CPADDRH      _at_   0x3F21;   // Current RX Packet Address High Byte
+  65          volatile unsigned char xdata     CPADDRL      _at_   0x3F22;   // Current RX Packet Address Low Byte
+  66          volatile unsigned char xdata     CPTLB        _at_   0x3F1A;   // Current RX Packet TLB Number
+  67          volatile unsigned char xdata     TLBVALID     _at_   0x3F1C;   // TLB Valid Indicators
+  68          volatile unsigned char xdata     TLB0INFOH    _at_   0x3F23;   // TLB0 Information High Byte
+  69          volatile unsigned char xdata     TLB0INFOL    _at_   0x3F24;   // TLB0 Information Low Byte
+  70          volatile unsigned char xdata     TLB0LENH     _at_   0x3F25;   // TLB0 Length High Byte
+  71          volatile unsigned char xdata     TLB0LENL     _at_   0x3F26;   // TLB0 Length Low Byte
+  72          volatile unsigned char xdata     TLB0ADDRH    _at_   0x3F27;   // TLB0 Address High Byte
+  73          volatile unsigned char xdata     TLB0ADDRL    _at_   0x3F28;   // TLB0 Address Low Byte
+  74          volatile unsigned char xdata     TLB1INFOH    _at_   0x3F29;   // TLB1 Information High Byte
+  75          volatile unsigned char xdata     TLB1INFOL    _at_   0x3F2A;   // TLB1 Information Low Byte
+  76          volatile unsigned char xdata     TLB1LENH     _at_   0x3F2b;   // TLB1 Length High Byte
+  77          volatile unsigned char xdata     TLB1LENL     _at_   0x3F2C;   // TLB1 Length Low Byte
+  78          volatile unsigned char xdata     TLB1ADDRH    _at_   0x3F2D;   // TLB1 Address High Byte
+  79          volatile unsigned char xdata     TLB1ADDRL    _at_   0x3F2E;   // TLB1 Address Low Byte
+  80          volatile unsigned char xdata     TLB2INFOH    _at_   0x3F2F;   // TLB2 Information High Byte
+  81          volatile unsigned char xdata     TLB2INFOL    _at_   0x3F30;   // TLB2 Information Low Byte
+  82          volatile unsigned char xdata     TLB2LENH     _at_   0x3F31;   // TLB2 Length High Byte
+  83          volatile unsigned char xdata     TLB2LENL     _at_   0x3F32;   // TLB2 Length Low Byte
+  84          volatile unsigned char xdata     TLB2ADDRH    _at_   0x3F33;   // TLB2 Address High Byte
+  85          volatile unsigned char xdata     TLB2ADDRL    _at_   0x3F34;   // TLB2 Address Low Byte
+  86          volatile unsigned char xdata     TLB3INFOH    _at_   0x3F35;   // TLB3 Information High Byte
+  87          volatile unsigned char xdata     TLB3INFOL    _at_   0x3F36;   // TLB3 Information Low Byte
+  88          volatile unsigned char xdata     TLB3LENH     _at_   0x3F37;   // TLB3 Length High Byte
+  89          volatile unsigned char xdata     TLB3LENL     _at_   0x3F38;   // TLB3 Length Low Byte
+  90          volatile unsigned char xdata     TLB3ADDRH    _at_   0x3F39;   // TLB3 Address High Byte
+  91          volatile unsigned char xdata     TLB3ADDRL    _at_   0x3F3A;   // TLB3 Address Low Byte
+  92          volatile unsigned char xdata     TLB4INFOH    _at_   0x3F3B;   // TLB4 Information High Byte
+  93          volatile unsigned char xdata     TLB4INFOL    _at_   0x3F3C;   // TLB4 Information Low Byte
+  94          volatile unsigned char xdata     TLB4LENH     _at_   0x3F3D;   // TLB4 Length High Byte
+  95          volatile unsigned char xdata     TLB4LENL     _at_   0x3F3E;   // TLB4 Length Low Byte
+  96          volatile unsigned char xdata     TLB4ADDRH    _at_   0x3F3F;   // TLB4 Address High Byte
+  97          volatile unsigned char xdata     TLB4ADDRL    _at_   0x3F40;   // TLB4 Address Low Byte
+  98          volatile unsigned char xdata     TLB5INFOH    _at_   0x3F41;   // TLB5 Information High Byte
+  99          volatile unsigned char xdata     TLB5INFOL    _at_   0x3F42;   // TLB5 Information Low Byte
+ 100          volatile unsigned char xdata     TLB5LENH     _at_   0x3F43;   // TLB5 Length High Byte
+ 101          volatile unsigned char xdata     TLB5LENL     _at_   0x3F44;   // TLB5 Length Low Byte
+ 102          volatile unsigned char xdata     TLB5ADDRH    _at_   0x3F45;   // TLB5 Address High Byte
+ 103          volatile unsigned char xdata     TLB5ADDRL    _at_   0x3F46;   // TLB5 Address Low Byte
+ 104          volatile unsigned char xdata     TLB6INFOH    _at_   0x3F47;   // TLB6 Information High Byte
+ 105          volatile unsigned char xdata     TLB6INFOL    _at_   0x3F48;   // TLB6 Information Low Byte
+ 106          volatile unsigned char xdata     TLB6LENH     _at_   0x3F49;   // TLB6 Length High Byte
+ 107          volatile unsigned char xdata     TLB6LENL     _at_   0x3F4A;   // TLB6 Length Low Byte
+ 108          volatile unsigned char xdata     TLB6ADDRH    _at_   0x3F4B;   // TLB6 Address High Byte
+ 109          volatile unsigned char xdata     TLB6ADDRL    _at_   0x3F4C;   // TLB6 Address Low Byte
+ 110          volatile unsigned char xdata     TLB7INFOH    _at_   0x3F4D;   // TLB7 Information High Byte
+ 111          volatile unsigned char xdata     TLB7INFOL    _at_   0x3F4E;   // TLB7 Information Low Byte
+ 112          volatile unsigned char xdata     TLB7LENH     _at_   0x3F4F;   // TLB7 Length High Byte
+ 113          volatile unsigned char xdata     TLB7LENL     _at_   0x3F50;   // TLB7 Length Low Byte
+ 114          volatile unsigned char xdata     TLB7ADDRH    _at_   0x3F51;   // TLB7 Address High Byte
+ 115          volatile unsigned char xdata     TLB7ADDRL    _at_   0x3F52;   // TLB7 Address Low Byte
+C51 COMPILER V8.05a   CP220X_REG                                                           09/01/2010 15:06:33 PAGE 3   
+
+ 116          volatile unsigned char xdata     RXFIFOHEADH  _at_   0x3F17;   // Receive Buffer Head Pointer High Byte
+ 117          volatile unsigned char xdata     RXFIFOHEADL  _at_   0x3F18;   // Receive Buffer Head Pointer Low Byte
+ 118          volatile unsigned char xdata     RXFIFOTAILH  _at_   0x3F15;   // Receive Buffer Tail Pointer High Byte
+ 119          volatile unsigned char xdata     RXFIFOTAILL  _at_   0x3F16;   // Receive Buffer Tail Pointer Low Byte
+ 120          volatile unsigned char xdata     RXFIFOSTA    _at_   0x3F5B;   // Receive Buffer Status
+ 121          volatile unsigned char xdata     TXSTARTH     _at_   0x3F59;   // Transmit Data Starting Address High Byte
+ 122          volatile unsigned char xdata     TXSTARTL     _at_   0x3F5A;   // Transmit Data Starting Address Low Byte
+ 123          volatile unsigned char xdata     TXAUTOWR     _at_   0x3F03;   // Transmit Data Autowrite
+ 124          volatile unsigned char xdata     TXENDH       _at_   0x3F57;   // Transmit Data Ending Address High Byte
+ 125          volatile unsigned char xdata     TXENDL       _at_   0x3F58;   // Transmit Data Ending Address Low Byte
+ 126          volatile unsigned char xdata     TXCN         _at_   0x3F53;   // Transmit Control
+ 127          volatile unsigned char xdata     TXPAUSEH     _at_   0x3F55;   // Transmit Pause High Byte
+ 128          volatile unsigned char xdata     TXPAUSEL     _at_   0x3F56;   // Transmit Pause Low Byte
+ 129          volatile unsigned char xdata     TXBUSY       _at_   0x3F54;   // Transmit Busy Indicator
+ 130          volatile unsigned char xdata     TXSTA6       _at_   0x3F5C;   // Transmit Status Vector 6
+ 131          volatile unsigned char xdata     TXSTA5       _at_   0x3F5D;   // Transmit Status Vector 5
+ 132          volatile unsigned char xdata     TXSTA4       _at_   0x3F5E;   // Transmit Status Vector 4
+ 133          volatile unsigned char xdata     TXSTA3       _at_   0x3F5F;   // Transmit Status Vector 3
+ 134          volatile unsigned char xdata     TXSTA2       _at_   0x3F60;   // Transmit Status Vector 2
+ 135          volatile unsigned char xdata     TXSTA1       _at_   0x3F61;   // Transmit Status Vector 1
+ 136          volatile unsigned char xdata     TXSTA0       _at_   0x3F62;   // Transmit Status Vector 0
+ 137          volatile unsigned char xdata     PHYCN        _at_   0x3F78;   // Physical Layer Control
+ 138          volatile unsigned char xdata     PHYCF        _at_   0x3F79;   // Physical Layer Configuration
+ 139          volatile unsigned char xdata     PHYSTA       _at_   0x3F80;   // Physical Layer Status
+ 140          volatile unsigned char xdata     TXPWR        _at_   0x3F7A;   // Transmitter Power Register
+ 141          
+ 142          //-----------------------------------------------------------------------------
+ 143          // End Of File
+ 144          //-----------------------------------------------------------------------------
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   ----    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

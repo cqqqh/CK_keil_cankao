@@ -1,0 +1,108 @@
+C51 COMPILER V9.06   MCU_INIT                                                              04/20/2012 16:19:01 PAGE 1   
+
+
+C51 COMPILER V9.06, COMPILATION OF MODULE MCU_INIT
+OBJECT MODULE PLACED IN mcu_init.OBJ
+COMPILER INVOKED BY: D:\Program Files\Keil\C51\BIN\C51.EXE mcu_init.c LARGE BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include "c8051f340.h"
+   2          #include "mcu_init.h"
+   3          
+   4          /*************************** c8051f340硬件初始化 *******************************/
+   5          void Port_IO_Init(void)//端口配置
+   6          {
+   7   1         P0MDOUT = 0x1D;               // enable TX0,SCK,MOSI as a push-pull
+   8   1         P2MDOUT = 0x02;                       //     enable P2.1 as a push-pull
+   9   1         XBR0    = 0x03;               // UART0 TX and RX pins enabled, SPI enabled
+  10   1         XBR1    = 0xC0;  // Enable crossbar, disable weak pull-up
+  11   1      }
+  12          
+  13          /*------------------------------------------------------------------------------------*/
+  14          void Oscillator_Init()//系统时钟配置
+  15          {
+  16   1              //48M
+  17   1              int i = 0;
+  18   1          FLSCL     = 0x90;
+  19   1          CLKMUL    = 0x80;
+  20   1          for (i = 0; i < 20; i++);    // Wait 5us for initialization
+  21   1          CLKMUL    |= 0xC0;
+  22   1          while ((CLKMUL & 0x20) == 0);
+  23   1          CLKSEL    = 0x03;
+  24   1      }
+  25          
+  26          /*------------------------------------------------------------------------------------*/
+  27          void UART0_Init(void)//串口配置
+  28          {
+  29   1         int xdata sbrl ;
+  30   1      
+  31   1         sbrl =  (0xFFFF - (SYSCLK/BAUDRATE/2)) + 1;
+  32   1         SCON0 = 0x10;                   
+  33   1      
+  34   1         if (SYSCLK/BAUDRATE/2/256 < 1) 
+  35   1         {
+  36   2            TH1 = -(SYSCLK/BAUDRATE/2);
+  37   2            CKCON |=  0x08;                  // T1M = 1; SCA1:0 = xx
+  38   2         } 
+  39   1         else if (SYSCLK/BAUDRATE/2/256 < 4) 
+  40   1         {
+  41   2            TH1 = -(SYSCLK/BAUDRATE/2/4);
+  42   2            CKCON &= ~0x0B;                  
+  43   2            CKCON |=  0x01;                  // T1M = 0; SCA1:0 = 01
+  44   2         } 
+  45   1         else if (SYSCLK/BAUDRATE/2/256 < 12) 
+  46   1         {
+  47   2            TH1 = -(SYSCLK/BAUDRATE/2/12);
+  48   2            CKCON &= ~0x0B;                  // T1M = 0; SCA1:0 = 00
+  49   2         } 
+  50   1         else 
+  51   1         {
+  52   2            TH1 = -(SYSCLK/BAUDRATE/2/48);
+  53   2            CKCON &= ~0x0B;                  // T1M = 0; SCA1:0 = 10
+  54   2            CKCON |=  0x02;
+  55   2         }
+C51 COMPILER V9.06   MCU_INIT                                                              04/20/2012 16:19:01 PAGE 2   
+
+  56   1      
+  57   1         TL1 = TH1;                          // init Timer1
+  58   1         TMOD &= ~0xf0;                      // TMOD: timer 1 in 8-bit autoreload
+  59   1         TMOD |=  0x20;
+  60   1         TR1 = 1;                            // START Timer1
+  61   1         TI0 = 1;                            // Indicate TX0 ready
+  62   1      }
+  63          
+  64          /*------------------------------------------------------------------------------------*/
+  65          void SPI_Init (void)//SPI总线配置
+  66          {
+  67   1              SPI0CFG = 0x70;              // data sampled on rising edge, clk
+  68   1                                       // active low,
+  69   1                                       // 8-bit data words, master mode;
+  70   1      
+  71   1              SPI0CN = 0x0F;               // 4-wire mode; SPI enabled; flags cleared
+  72   1              SPI0CKR = 0xef;                          // 48m, SPI clk = 100k
+  73   1      }
+  74          
+  75          /*------------------------------------------------------------------------------------*/
+  76          //call this routine to initialize all peripherals
+  77          void Init_Devices(void)
+  78          {
+  79   1          Port_IO_Init();
+  80   1          Oscillator_Init();
+  81   1              UART0_Init();
+  82   1              SPI_Init();
+  83   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =     99    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       2
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

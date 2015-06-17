@@ -1,0 +1,224 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0041)http://www.51c51.com/test/c51test/B16.htm -->
+<!-- saved from url=(0037)http://www.jinjubao.com/jiangzuo1.htm --><HTML><HEAD><TITLE>PT2262/PT2272编码解码</TITLE><LINK 
+href="PT2262-PT2272编码解码.files/gpszx.css" type=text/css rel=stylesheet>
+<META http-equiv=Content-Language content=zh-cn>
+<META http-equiv=Content-Type content="text/html; charset=gb2312">
+<META content="MSHTML 6.00.2800.1458" name=GENERATOR>
+<META content=FrontPage.Editor.Document name=ProgId></HEAD>
+<BODY>
+<DIV align=center>
+<TABLE height=28 width=770>
+  <TBODY>
+  <TR>
+    <TD width=910 colSpan=11 height=1>
+      <P align=right><FONT color=#000080 size=2><SPAN lang=en-us><IMG height=97 
+      src="PT2262-PT2272编码解码.files/titou3.gif" width=770 border=0></SPAN></FONT> 
+      <SPAN lang=en-us><FONT color=#0066cc 
+      size=2>51测试网开通新域名www.8951.com啦！速度更快更稳定！</FONT></SPAN><FONT 
+      color=#0066cc><FONT size=2><SPAN style="BACKGROUND-COLOR: #0099ff"><IMG 
+      height=11 src="PT2262-PT2272编码解码.files/gif091.gif" width=28 
+      border=0></SPAN><SPAN 
+      style="BACKGROUND-COLOR: #ffffff">自学单片机跟我来！</SPAN></FONT></FONT></P></TD></TR>
+  <CENTER>
+  <TR>
+    <TD width=70 height=1><FONT size=2><A 
+      href="http://www.51c51.com/index.htm"><FONT color=#ffffff><SPAN 
+      style="BACKGROUND-COLOR: #0099ff">返回主页</SPAN></FONT></A></FONT> </TD>
+    <TD width=70 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#000000><A 
+      href="http://www.8951.com/BBS/index.asp">给我留言</A></FONT></SPAN></FONT> </TD>
+    <TD width=70 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#ffffff><A 
+      href="http://www.51c51.com/jiaoxue.htm"><FONT 
+      color=#ffffff>单片机教学</FONT></A></FONT></SPAN></FONT> </TD>
+    <TD width=76 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#000000><A 
+      href="http://www.51c51.com/tigao.htm">单片机提高</A></FONT></SPAN></FONT> </TD>
+    <TD width=64 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><A 
+      href="http://www.51c51.com/yinxiang.htm"><FONT 
+      color=#ffffff>音响技术</FONT></A></SPAN></FONT> </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#000000><A 
+      href="http://www.51c51.com/pinzhi.htm">品质技术</A></FONT></SPAN></FONT> </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><A 
+      href="http://www.51c51.com/test/c51test/002.htm"><FONT 
+      color=#ffffff>技术资料</FONT></A></SPAN></FONT> </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#ffffff>&nbsp;</FONT><A 
+      href="http://www.51c51.com/down/down.htm"><FONT 
+      color=#000000>软件下载</FONT></A></SPAN></FONT> </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#000000><A 
+      href="http://www.51c51.com/yejin/yejin.htm">学液晶</A></FONT></SPAN></FONT> 
+    </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><A 
+      href="http://www.51c51.com/chanpin.htm"><FONT 
+      color=#ffffff>产品介绍</FONT></A></SPAN></FONT> </TD>
+    <TD width=71 height=1><FONT size=2><SPAN 
+      style="BACKGROUND-COLOR: #0099ff"><FONT color=#000000><A 
+      href="http://www.51c51.com/10/huikan.htm">如何购买</A></FONT></SPAN></FONT> 
+  </TD></TR></TBODY></TABLE></CENTER></DIV>
+<SCRIPT language=vbscript></SCRIPT>
+
+<SCRIPT language=vbscript></SCRIPT>
+
+<DIV align=center>
+<CENTER>
+<TABLE width=770 border=0>
+  <TBODY>
+  <TR>
+    <TD><FONT class=htd id=font_word 
+      style="FONT-SIZE: 14px; FONT-FAMILY: 宋体, Verdana, Arial, Helvetica, sans-serif"><BR></FONT>
+      <TABLE>
+        <TBODY>
+        <TR>
+          <TD width=654 height=1426>
+            <P align=left><FONT size=+1>编码解码芯片PT2262/PT2272芯片原理简介：</FONT></P>
+            <P align=left><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;PT2262/2272是台湾普城公司生产的一种CMOS工艺制造的低功耗低价位通用编解码电路，PT2262/2272最多可有12位(A0-A11)三态地址端管脚(悬空,接高电平,接低电平),任意组合可提供531441地址码,PT2262最多可有6位(D0-D5)数据端管脚,设定的地址码和数据码从17脚串行输出，可用于无线遥控发射电路。</FONT></P>
+            <P align=left><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;编码芯片PT2262发出的编码信号由：地址码、数据码、同步码组成一个完整的码字，解码芯片PT2272接收到信号后，其地址码经过两次比较核对后，VT脚才输出高电平，与此同时相应的数据脚也输出高电平，如果发送端一直按住按键，编码芯片也会连续发射。当发射机没有按键按下时，PT2262不接通电源，其17脚为低电平，所以315MHz的高频发射电路不工作，当有按键按下时，PT2262得电工作，其第17脚输出经调制的串行数据信号，当17脚为高电平期间315MHz的高频发射电路起振并发射等幅高频信号，当17脚为低平期间315MHz的高频发射电路停止振荡，所以高频发射电路完全收控于PT2262的17脚输出的数字信号，从而对高频电路完成幅度键控（ASK调制）相当于调制度为100％的调幅。<BR><BR>PT2262特点<BR><BR>l 
+            CMOS工艺制造，低功耗<BR>l 外部元器件少<BR>l RC振荡电阻<BR>l 工作电压范围宽：2.6-15v<BR>l 
+            数据最多可达6位<BR>l 地址码最多可达531441种<BR><BR>应用范围<BR><BR>l 车辆防盗系统<BR>l 
+            家庭防盗系统<BR>l 遥 控 玩 具<BR>l 其他电器遥控<BR><BR>引 脚 图：<BR><BR><IMG height=177 
+            src="PT2262-PT2272编码解码.files/2262a.jpg" 
+            width=438><BR><BR>管脚说明：</FONT></P>
+            <TABLE width="98%" border=1>
+              <TBODY>
+              <TR>
+                <TD width="14%"><FONT size=+1>名称</FONT></TD>
+                <TD width="14%"><FONT size=+1>管脚</FONT></TD>
+                <TD width="72%"><FONT size=+1>说 明</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>A0-A11</FONT></TD>
+                <TD>
+                  <P><FONT size=+1>1-8、10-13</FONT></P></TD>
+                <TD><FONT 
+              size=+1>地址管脚,用于进行地址编码,可置为“0”,“1”,“f”(悬空),</FONT></TD></TR>
+              <TR>
+                <TD height=22><FONT size=+1>D0-D5</FONT></TD>
+                <TD><FONT size=+1>7-8、10-13</FONT></TD>
+                <TD><FONT size=+1>数据输入端，有一个为“1”即有编码发出，内部下拉</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>Vcc</FONT></TD>
+                <TD><FONT size=+1>18</FONT></TD>
+                <TD><FONT size=+1>电源正端（＋）</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>Vss</FONT></TD>
+                <TD><FONT size=+1>9</FONT></TD>
+                <TD><FONT size=+1>电源负端（－）</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>TE</FONT></TD>
+                <TD><FONT size=+1>14</FONT></TD>
+                <TD><FONT size=+1>编码启动端，用于多数据的编码发射，低电平有效；</FONT></TD></TR>
+              <TR>
+                <TD height=20><FONT size=+1>OSC1</FONT></TD>
+                <TD><FONT size=+1>16</FONT></TD>
+                <TD><FONT size=+1>振荡电阻输入端，与OSC2所接电阻决定振荡频率；</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>OSC2</FONT></TD>
+                <TD><FONT size=+1>15</FONT></TD>
+                <TD><FONT size=+1>振荡电阻振荡器输出端；</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>Dout</FONT></TD>
+                <TD><FONT size=+1>17</FONT></TD>
+                <TD><FONT size=+1>编码输出端（正常时为低电平）</FONT></TD></TR></TBODY></TABLE>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;在具体的应用中，外接振荡电阻可根据需要进行适当的调节，阻值越大振荡频率越慢，编码的宽度越大，发码一帧的时间越长.</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;网站上大部分产品都是用2262/1.2M/2272/200K组合的，少量产品用2262/4.7M/2272/820K</FONT></P>
+            <P>　</P>
+            <P><FONT size=+1><IMG height=426 
+            src="PT2262-PT2272编码解码.files/226284.jpg" width=482></FONT></P>
+            <P><FONT size=+1><IMG height=423 
+            src="PT2262-PT2272编码解码.files/2262120.jpg" width=488><BR>　<BR>解码电路 
+            PT2272 引 脚 图：</FONT></P>
+            <P><FONT size=+1><IMG height=180 
+            src="PT2262-PT2272编码解码.files/2272a.jpg" width=385></FONT></P>
+            <TABLE width="97%" border=1>
+              <TBODY>
+              <TR>
+                <TD width="14%"><FONT size=+1>名称</FONT></TD>
+                <TD width="14%"><FONT size=+1>管脚</FONT></TD>
+                <TD width="72%"><FONT size=+1>说 明</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>A0-A11</FONT></TD>
+                <TD>
+                  <P><FONT size=+1>1-8、10-13</FONT></P></TD>
+                <TD><FONT 
+                  size=+1>地址管脚,用于进行地址编码,可置为“0”,“1”,“f”(悬空),必须与2262一致,否则不解码</FONT></TD></TR>
+              <TR>
+                <TD height=22><FONT size=+1>D0-D5</FONT></TD>
+                <TD><FONT size=+1>7-8、10-13</FONT></TD>
+                <TD><FONT 
+                  size=+1>地址或数据管脚,当做为数据管脚时,只有在地址码与2262一致,数据管脚才能输出与2262数据端对应的高电平,否则输出为低电平,锁存型只有在接收到下一数据才能转换</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>Vcc</FONT></TD>
+                <TD><FONT size=+1>18</FONT></TD>
+                <TD><FONT size=+1>电源正端（＋）</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>Vss</FONT></TD>
+                <TD><FONT size=+1>9</FONT></TD>
+                <TD><FONT size=+1>电源负端（－）</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>DIN</FONT></TD>
+                <TD><FONT size=+1>14</FONT></TD>
+                <TD><FONT size=+1>数据信号输入端，来自接收模块输出端</FONT></TD></TR>
+              <TR>
+                <TD height=20><FONT size=+1>OSC1</FONT></TD>
+                <TD><FONT size=+1>16</FONT></TD>
+                <TD><FONT size=+1>振荡电阻输入端，与OSC2所接电阻决定振荡频率；</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>OSC2</FONT></TD>
+                <TD><FONT size=+1>15</FONT></TD>
+                <TD><FONT size=+1>振荡电阻振荡器输出端；</FONT></TD></TR>
+              <TR>
+                <TD><FONT size=+1>VT</FONT></TD>
+                <TD><FONT size=+1>17</FONT></TD>
+                <TD><FONT size=+1>解码有效确认 
+              输出端（常低）解码有效变成高电平（瞬态）</FONT></TD></TR></TBODY></TABLE>
+            <P><FONT size=+1><IMG height=189 
+            src="PT2262-PT2272编码解码.files/2272a1.jpg" width=563></FONT></P>
+            <P><FONT size=+1><IMG height=270 
+            src="PT2262-PT2272编码解码.files/2272a2.jpg" width=567></FONT></P>
+            <P><FONT size=+1><IMG height=409 
+            src="PT2262-PT2272编码解码.files/2272a3.jpg" width=516></FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;地址码和数据码都用宽度不同的脉冲来表示，两个窄脉冲表示“0”；两个宽脉冲表示“1”；一个窄脉冲和一个宽脉冲表示“F”也就是地址码的“悬空”</FONT></P>
+            <P>　</P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;上面是我们从超再生接收模块信号输出脚上截获的一段波形，可以明显看到，图上半部分是一组一组的字码，每组字码之间有同步码隔开，所以我们如果用单片机软件解码时，程序只要判断出同步码，然后对后面的字码进行脉冲宽度识别即可。图下部分是放大的一组字码：一个字码由12位AD码（地址码加数据码，比如8位地址码加4位数据码）组成，每个AD位用两个脉冲来代表：两个窄脉冲表示“0”；两个宽脉冲表示“1”；一个窄脉冲和一个宽脉冲表示“F”也就是地址码的“悬空”</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;2262每次发射时至少发射4组字码，2272只有在连续两次检测到相同的地址码加数据码才会把数据码中的“1”驱动相应的数据输出端为高电平和驱动VT端同步为高电平。</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;因为无线发射的特点，第一组字码非常容易受零电平干扰，往往会产生误码，所以程序可以丢弃处理。&nbsp;</FONT></P>
+            <P><FONT size=+1><IMG height=287 
+            src="PT2262-PT2272编码解码.files/2272a4.jpg" width=507></FONT></P>
+            <P><FONT size=+1><IMG height=209 
+            src="PT2262-PT2272编码解码.files/2272a5.jpg" width=518></FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;PT2272解码芯片有不同的后缀，表示不同的功能，有L4/M4/L6/M6之分，其中L表示锁存输出，数据只要成功接收就能一直保持对应的电平状态，直到下次遥控数据发生变化时改变。M表示非锁存输出，数据脚输出的电平是瞬时的而且和发射端是否发射相对应，可以用于类似点动的控制。后缀的6和4表示有几路并行的控制通道，当采用4路并行数据时（PT2272-M4)，对应的地址编码应该是8位，如果采用6路的并行数据时(PT2272-M6)，对应的地址编码应该是6位。</FONT></P>
+            <P><FONT size=+1><STRONG><FONT 
+            color=#0000ff>PT2262/2272芯片的地址编码设定和修改：</FONT></STRONG></FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;在通常使用中，我们一般采用8位地址码和4位数据码，这时编码电路PT2262和解码PT2272的第1～8脚为地址设定脚，有三种状态可供选择：悬空、接正电源、接地三种状态，3的8次方为6561，所以地址编码不重复度为6561组，只有发射端PT2262和接收端PT2272的地址编码完全相同，才能配对使用，遥控模块的生产厂家为了便于生产管理，出厂时遥控模块的PT2262和PT2272的八位地址编码端全部悬空，这样用户可以很方便选择各种编码状态，用户如果想改变地址编码，只要将PT2262和PT2272的1～8脚设置相同即可，例如将发射机的PT2262的第1脚接地第5脚接正电源，其它引脚悬空，那么接收机的PT2272只要也第1脚接地第5脚接正电源，其它引脚悬空就能实现配对接收。当两者地址编码完全一致时，接收机对应的D1～D4端输出约4V互锁高电平控制信号，同时VT端也输出解码有效高电平信号。用户可将这些信号加一级放大，便可驱动继电器、功率三极管等进行负载遥控开关操纵。</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;我们网站提供的遥控类产品上一般都预留地址编码区，采用焊锡搭焊的方式来选择：悬空、接正电源、接地三种状态,出厂是一般都悬空，便于客户自己修改地址码。这里我们以常用的超再生插针式接收板的跳线区为例:</FONT></P>
+            <P>　</P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;网友可以看到,跳线区是由三排焊盘组成,中间的8个焊盘是PT2272解码芯片的第1～8脚,最左边有1字样的是芯片的第一脚,最上面的一排焊盘上标有L字样,表示和电源地连同,如果用万用表测量会发现和PT2272的第9脚连同;最下面的一排焊盘上标有H字样,表示和正电源连同,如果用万用表测量会发现和PT2272的第18脚连同.所谓的设置地址码就是用焊锡将上下相邻的焊盘用焊锡桥搭短路起来，例如将第一脚和上面的焊盘L用焊锡短路后就相当于将PT2272芯片的第一脚设置为接地，同理将第一脚和下面的焊盘H用焊锡短路后就相当于将PT2272芯片的第一脚设置为接正电源，如果什么都不接就是表示悬空。</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;设置地址码的原则是：同一个系统地址码必须一致；不同的系统可以依靠不同的地址码加以区分。至于设置什么样的地址码完全随客户喜欢。</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;站长对采用2262/1.2M/2272/200K的时序波形很有兴趣，一直想知道如何用单片机来模拟编码、解码的，我希望有实际开发经验的网友能指点我一下，好共同开发一些小产品。</FONT></P>
+            <P><FONT 
+            size=+1>&nbsp;&nbsp;&nbsp;&nbsp;这里我们可以提供一种和PT2262/2272芯片完全兼容的SC2262/2272芯片，这种芯片可以直接替代PT系列芯片，外围无需作任何改动，但是价格要比PT系列便宜很多，一般PT系列批量的报价为2.5元左右，而SC系列的批量价格为1.8元<FONT 
+            face=宋体>。</FONT></FONT><FONT lang=ZH-CN face=宋体 
+            size=+1>大批量价格另议。感兴趣的客户可以购买样片进行测试。</FONT></P>
+            <P><FONT size=+1><IMG height=294 
+            src="PT2262-PT2272编码解码.files/SC.jpg" 
+            width=260>感兴趣的朋友请与电子制作试验谢刚联系！</FONT></P></TD></TR></TBODY></TABLE></TD></TR></TBODY></TABLE></CENTER></DIV></BODY></HTML>
